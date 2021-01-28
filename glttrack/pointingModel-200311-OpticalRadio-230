@@ -1,0 +1,28 @@
+# Pointing Model Parameters for Antenna-1
+# All values are in arcseconds.          
+# Parameter   Optical      Radio         
+AzDC            -23.97       -49.81
+AzColl         2886.357     279.818
+ElTilt          -12.221       1.949
+AAzTltSin       -25.481     -19.728
+AAzTltCos       -14.634     -18.964
+AAzTltSin2       -0.635      -1.155
+AAzTltCos2       -0.688      -1.038
+AzEncSin          0.000       0.000
+AzEncCos          0.000       0.000
+AzEncSin2         0.000       0.000
+AzEncCos2         0.000       0.000
+AzEncSin3         0.000       0.000
+AzEncCos3         0.000       0.000
+AzRms             2.94        2.130
+ElDC           -799.290     775.989
+ElSag            -5.552     -14.13
+ElSagSin         22.36       28.95
+ElSagTan	 18.91        0.000
+EAzTltSin       -23.253     -19.023
+EAzTltCos       -11.124     -11.854
+EAzTltSin2       -0.852      -0.722
+EAzTltCos2       -0.342       0.018
+ElRms             2.45        2.000
+TiltFlag              0           0
+Date            16Dec19     11Mar20 

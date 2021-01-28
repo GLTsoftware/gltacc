@@ -1,0 +1,151 @@
+/*
+  if (acuStatusResp.azStatusMode == 0x1) printf(" Az stop.\n");
+  if (acuStatusResp.azStatusMode == 0x21) printf(" Az Maintenance.\n");
+  if (acuStatusResp.azStatusMode == 0x2) printf(" Az Preset.\n");
+  if (acuStatusResp.azStatusMode == 0x3) printf(" Az Program Track.\n");
+  if (acuStatusResp.azStatusMode == 0x4) printf(" Az Rate.\n");
+  if (acuStatusResp.azStatusMode == 0x5) printf(" Az Sector Scan.\n");
+  if (acuStatusResp.azStatusMode == 0x6) printf(" Az Survival Position (stow).\n");
+  if (acuStatusResp.azStatusMode == 0xe) printf(" Az Maintenance Position (stow).\n");
+  if (acuStatusResp.azStatusMode == 0x4e) printf(" Az Stow (stow pins not retracted).\n");
+  if (acuStatusResp.azStatusMode == 0x26) printf(" Az unstow.\n");
+  if (acuStatusResp.azStatusMode == 0x8) printf(" Az Two line track.\n");
+  if (acuStatusResp.azStatusMode == 0x9) printf(" Az Star Track.\n");
+  if (acuStatusResp.azStatusMode == 0x29) printf(" Az Sun Track.\n");
+
+  if (acuStatusResp.elStatusMode == 1) printf(" El stop.\n");
+  if (acuStatusResp.elStatusMode == 33) printf(" El Maintenance.\n");
+  if (acuStatusResp.elStatusMode == 2) printf(" El Preset.\n");
+  if (acuStatusResp.elStatusMode == 3) printf(" El Program Track.\n");
+  if (acuStatusResp.elStatusMode == 4) printf(" El Rate.\n");
+  if (acuStatusResp.elStatusMode == 5) printf(" El Sector Scan.\n");
+  if (acuStatusResp.elStatusMode == 6) printf(" El Survival Position (stow).\n");
+  if (acuStatusResp.elStatusMode == 14) printf(" El Maintenance Position (stow).\n");
+  if (acuStatusResp.elStatusMode == 78) printf(" El Stow (stow pins not retracted).\n");
+  if (acuStatusResp.elStatusMode == 38) printf(" El unstow.\n");
+  if (acuStatusResp.elStatusMode == 8) printf(" El Two line track.\n");
+  if (acuStatusResp.elStatusMode == 9) printf(" El Star Track.\n");
+  if (acuStatusResp.elStatusMode == 41) printf(" El Sun Track.\n");
+
+  if (acuStatusResp.servoSystemStatusAz[0] & 1)
+                printf(" Az emergency limit.\n");
+  if (acuStatusResp.servoSystemStatusAz[0] & 2)
+                printf(" Az operating limit ccw.\n");
+  if (acuStatusResp.servoSystemStatusAz[0] & 4)
+                printf(" Az operating limit cw.\n");
+  if (acuStatusResp.servoSystemStatusAz[0] & 8)
+                printf(" Az prelimit ccw.\n");
+  if (acuStatusResp.servoSystemStatusAz[0] & 16)
+                printf(" Az prelimit cw.\n");
+  if (acuStatusResp.servoSystemStatusAz[0] & 32)
+                printf(" Az stow position.\n");
+  if (acuStatusResp.servoSystemStatusAz[0] & 64)
+                printf(" Az stow pin inserted.\n");
+  if (acuStatusResp.servoSystemStatusAz[0] & 128)
+                printf(" Az stow pin retracted.\n");
+
+ if (acuStatusResp.servoSystemStatusAz[1] & 1)
+                printf(" Az servo failure.\n");
+  if (acuStatusResp.servoSystemStatusAz[1] & 2)
+                printf(" Az brake failure.\n");
+  if (acuStatusResp.servoSystemStatusAz[1] & 4)
+                printf(" Az encoder failure.\n");
+  if (acuStatusResp.servoSystemStatusAz[1] & 8)
+                printf(" Az auxiliary mode.\n");
+  if (acuStatusResp.servoSystemStatusAz[1] & 16)
+                printf(" Az motion failure.\n");
+  if (acuStatusResp.servoSystemStatusAz[1] & 32)
+                printf(" Az CAN bus failure.\n");
+  if (acuStatusResp.servoSystemStatusAz[1] & 64)
+                printf(" Az axis disabled.\n");
+  if (acuStatusResp.servoSystemStatusAz[1] & 128)
+                printf(" Az computer disabled (local mode).\n");
+  printf ("servoSystemStatusEl bytes 1,2: 0x%x 0x%x \n",acuStatusResp.servoSystemStatusEl[0],acuStatusResp.servoSystemStatusEl[1]);
+  if (acuStatusResp.servoSystemStatusEl[0] & 1)
+                printf(" El emergency limit.\n");
+  if (acuStatusResp.servoSystemStatusEl[0] & 2)
+                printf(" El operating limit ccw.\n");
+  if (acuStatusResp.servoSystemStatusEl[0] & 4)
+                printf(" El operating limit cw.\n");
+  if (acuStatusResp.servoSystemStatusEl[0] & 8)
+                printf(" El prelimit ccw.\n");
+  if (acuStatusResp.servoSystemStatusEl[0] & 16)
+                printf(" El prelimit cw.\n");
+  if (acuStatusResp.servoSystemStatusEl[0] & 32)
+                printf(" El stow position.\n");
+  if (acuStatusResp.servoSystemStatusEl[0] & 64)
+                printf(" El stow pin inserted.\n");
+  if (acuStatusResp.servoSystemStatusEl[0] & 128)
+                printf(" El stow pin retracted.\n");
+
+  if (acuStatusResp.servoSystemStatusEl[1] & 1)
+                printf(" El servo failure.\n");
+  if (acuStatusResp.servoSystemStatusEl[1] & 2)
+                printf(" El brake failure.\n");
+  if (acuStatusResp.servoSystemStatusEl[1] & 4)
+                printf(" El encoder failure.\n");
+  if (acuStatusResp.servoSystemStatusEl[1] & 8)
+                printf(" El auxiliary mode.\n");
+  if (acuStatusResp.servoSystemStatusEl[1] & 16)
+                printf(" El motion failure.\n");
+  if (acuStatusResp.servoSystemStatusEl[1] & 32)
+                printf(" El CAN bus failure.\n");
+  if (acuStatusResp.servoSystemStatusEl[1] & 64)
+                printf(" El axis disabled.\n");
+  if (acuStatusResp.servoSystemStatusEl[1] & 128)
+                printf(" El computer disabled (local mode).\n");
+
+  printf ("servoSystemGStatus1-6: 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x\n",acuStatusResp.servoSystemGS[0],
+  acuStatusResp.servoSystemGS[1],
+  acuStatusResp.servoSystemGS[2],
+  acuStatusResp.servoSystemGS[3],
+  acuStatusResp.servoSystemGS[4],
+  acuStatusResp.servoSystemGS[5]);
+*/
+
+/*
+  if (acuStatusResp.servoSystemGS[0] & 1)
+                printf(" Door Interlock.\n");
+  if (acuStatusResp.servoSystemGS[0] & 2)
+                printf(" SAFE .\n");
+  if (acuStatusResp.servoSystemGS[0] & 64)
+                printf(" Emergency off.\n");
+  if (acuStatusResp.servoSystemGS[0] & 128)
+                printf(" Not on source.\n");
+
+  if (acuStatusResp.servoSystemGS[1] & 4)
+                printf(" Time error.\n");
+  if (acuStatusResp.servoSystemGS[1] & 8)
+                printf(" Year error.\n");
+  if (acuStatusResp.servoSystemGS[1] & 32)
+                printf(" Green mode active.\n");
+  if (acuStatusResp.servoSystemGS[1] & 64)
+                printf(" Speed high.\n");
+  if (acuStatusResp.servoSystemGS[1] & 128)
+                printf(" Remote.\n");
+
+  if (acuStatusResp.servoSystemGS[2] & 1)
+                printf(" Spline green.\n");
+  if (acuStatusResp.servoSystemGS[2] & 2)
+                printf(" Spline yellow.\n");
+  if (acuStatusResp.servoSystemGS[2] & 4)
+                printf(" Spline red.\n");
+  if (acuStatusResp.servoSystemGS[2] & 16)
+                printf(" Gearbox oil level warning.\n");
+  if (acuStatusResp.servoSystemGS[2] & 32)
+                printf(" PLC interface ok.\n");
+
+  if (acuStatusResp.servoSystemGS[3] & 1)
+                printf(" PCU mode.\n");
+  if (acuStatusResp.servoSystemGS[3] & 4)
+                printf(" Tiltmeter error.\n");
+
+  if (acuStatusResp.servoSystemGS[4] & 1)
+                printf(" Cabinet overtemperature.\n");
+  if (acuStatusResp.servoSystemGS[4] & 4)
+                printf(" Shutter open.\n");
+  if (acuStatusResp.servoSystemGS[4] & 8)
+                printf(" Shutter closed.\n");
+  if (acuStatusResp.servoSystemGS[4] & 16)
+                printf(" Shutter failure.\n");
+*/

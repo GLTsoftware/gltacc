@@ -1,0 +1,35 @@
+CC = gcc
+BIN = Planets
+LIB = -lm
+OBJ = Planets.o solsys2.o readeph0.o novas.o novascon.o ephem_util.o \
+ephem_read.o pleph.o
+
+all: $(BIN)
+
+Planets: Planets.o solsys2.o readeph0.o novas.o novascon.o ephem_read.o \
+ephem_util.o pleph.o
+	$(CC) -o $(BIN) $(OBJ) $(LIB) 
+
+Planets.o: Planets.c
+	$(CC) -c Planets.c -D${PADNO}
+
+solsys2.o: solsys2.c
+	$(CC) -c solsys2.c
+
+readeph0.o: readeph0.c
+	$(CC) -c readeph0.c
+
+novas.o: novas.c
+	$(CC) -c novas.c
+
+novascon.o: novascon.c
+	$(CC) -c novascon.c
+
+ephem_util.o: ephem_util.c
+	$(CC) -c ephem_util.c
+
+ephem_read.o: ephem_read.c
+	$(CC) -c ephem_read.c
+
+pleph.o: pleph.c
+	$(CC) -c pleph.c
