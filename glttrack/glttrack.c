@@ -14,6 +14,10 @@ to ACU via ethernet interface.
 Higher level commands issued from gltobscon are handled via DSM.
 Status variables from ACU are copied to DSM for monitoring.
 
+version 2.1
+2 Feb 2021
+Added Redis writes, to eventually replace DSM.
+
 *****************************************************************/
 
 #include <stdio.h>
@@ -32,6 +36,7 @@ Status variables from ACU are copied to DSM for monitoring.
 #include <stdlib.h>
 #include <termios.h>
 #include <pthread.h>
+#include <hiredis.h>
 #include "smapopt.h"
 #include "novas.h"
 #include "track.h"
@@ -52,6 +57,10 @@ Status variables from ACU are copied to DSM for monitoring.
 
 
 #define ACC "gltobscon"
+
+/* redis server (gltobscon) */
+#define REDIS_SERVER "192.168.1.11"
+#define REDIS_PORT 6379
 
 /* ACU ports, see 3.1.1.2 of ICD */
 #define ACU_CONTROL_PORT 9010
@@ -167,7 +176,6 @@ char opticalValue[20],radioValue[20];
 
 double 	radian;
 
-int 	antennaNumber=1;
 
 #if SERVO
 TrackServoSHM *tsshm;    /* Local pointer to shared memory for
@@ -204,6 +212,11 @@ int	cal_flag=0;
        int sockfdControl=0,sockfdMonitor=0;
      
         double az_enc_from_acu,el_enc_from_acu;
+
+char redisData[1024];
+redisContext *redisC;
+redisReply *redisResp;
+struct timeval redisTimeout = {2,500000}; /*1.5 seconds for redis timeout */
 
 /*end of global variables***************************************************/
 
@@ -559,20 +572,6 @@ DAEMONSET
         sigactionInt = sigaction(SIGTERM,&action, &old_action);
 
 
-
-
-	/* get the antenna number by identifying the host computer*/
-	uname(&unamebuf);
-	if(!strcmp(unamebuf.nodename,"acc1")) antennaNumber=1;
-	if(!strcmp(unamebuf.nodename,"acc2")) antennaNumber=2;
-	if(!strcmp(unamebuf.nodename,"acc3")) antennaNumber=3;
-	if(!strcmp(unamebuf.nodename,"acc4")) antennaNumber=4;
-	if(!strcmp(unamebuf.nodename,"acc5")) antennaNumber=5;
-	if(!strcmp(unamebuf.nodename,"acc6")) antennaNumber=6;
-	if(!strcmp(unamebuf.nodename,"acc7")) antennaNumber=7;
-	if(!strcmp(unamebuf.nodename,"acc8")) antennaNumber=8;
-
-
 /* uncomment this when the IRIG-B signal becomes available */
 #if 0
 	/* initializing the IRIG board */
@@ -604,6 +603,17 @@ DAEMONSET
 		fprintf(stderr,"Check if dsm is running.");
                 exit(-1);
         }
+
+       /* initialize connection to redis */
+       redisC = redisConnectWithTimeout(REDIS_SERVER,REDIS_PORT,redisTimeout);
+       if (redisC == NULL || redisC->err) {
+        if (redisC) {
+            printf("Connection error: %s\n", redisC->errstr);
+            redisFree(redisC);
+          } else {
+            printf("Connection error: can't allocate redis context\n");
+        }
+       }
 
 #if 0
 	/* start listening to ref. mem. interrupts for higher-level commands*/
@@ -796,6 +806,15 @@ new_source:
         dsm_status=dsm_write(DSM_HOST,"DSM_POLAR_DUT_SECONDS_F",&polar_dut_f);
 	fclose(fp_polar);
 
+        sprintf(redisData,"HSET gltTrackFile polarMJD %d ",polar_mjd);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET gltTrackFile polarDX %f ",polar_dx_f);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET gltTrackFile polarDY %f ",polar_dy_f);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET gltTrackFile polarDUT %f ",polar_dut_f);
+        redisResp = redisCommand(redisC,redisData);
+
 
     print_upper(sname);
 
@@ -971,7 +990,9 @@ new_source:
         if(dsm_status != DSM_SUCCESS) {
                 dsm_error_message(dsm_status,"dsm_write() solsysflag");
                 }
-
+        sprintf(redisData,"HSET gltTrackComp solsysFlag %h",sol_sys_flag);
+        redisResp = redisCommand(redisC,redisData);
+ 
 
 
 
@@ -989,6 +1010,11 @@ new_source:
 	dsm_status=dsm_read(DSM_HOST,"DSM_ELOFF_ARCSEC_D",&eloff,&timeStamp);	
 	dsm_status=dsm_read(DSM_HOST,"DSM_RAOFF_ARCSEC_D",&raOffset,&timeStamp);
 	dsm_status=dsm_read(DSM_HOST,"DSM_DECOFF_ARCSEC_D",&decOffset,&timeStamp);
+
+        sprintf(redisData,"HSET gltTrackUser raoff %lf",raOffset);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET gltTrackUser decoff %lf",decOffset);
+        redisResp = redisCommand(redisC,redisData);
 
 
     /*
@@ -1707,6 +1733,11 @@ for the actual positions*/
 	el_disp_rm = el_disp / radian;
 	dsm_status=dsm_write(DSM_HOST,"DSM_CMDDISP_AZ_DEG_D",&az_disp_rm);
 	dsm_status=dsm_write(DSM_HOST,"DSM_CMDDISP_EL_DEG_D",&el_disp_rm);
+        sprintf(redisData,"HSET gltTrackComp cmdAz %lf",az_disp_rm);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET gltTrackComp cmdEl %lf",el_disp_rm);
+        redisResp = redisCommand(redisC,redisData);
+
 
 	hour_angle = hangle2 * 12.0 / pi;
 
@@ -2035,42 +2066,11 @@ if(sun_avoid_flag==1) {
 	eloff_int=(short)eloff;
 	dsm_status=dsm_write(DSM_HOST,"DSM_AZOFF_ARCSEC_D",&azoff);
 	dsm_status=dsm_write(DSM_HOST,"DSM_ELOFF_ARCSEC_D",&eloff);
+        sprintf(redisData,"HSET gltTrackUser azoff %lf",azoff);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET gltTrackUser eloff %lf",eloff);
+        redisResp = redisCommand(redisC,redisData);
 
-#if 0
-	/* fill in the RM variables for ccd header info if optical mode*/
-	time1 = time(NULL);
-        tval = localtime(&time1);
-        if(antennaNumber==1) strcpy(antdir,"ant1");
-        if(antennaNumber==2) strcpy(antdir,"ant2");
-        if(antennaNumber==3) strcpy(antdir,"ant3");
-        if(antennaNumber==4) strcpy(antdir,"ant4");
-        if(antennaNumber==5) strcpy(antdir,"ant5");
-        if(antennaNumber==6) strcpy(antdir,"ant6");
-        if(antennaNumber==7) strcpy(antdir,"ant7");
-        if(antennaNumber==8) strcpy(antdir,"ant8");
-
-	sprintf(snamefits, "/opticalPointing/%s/%s_%02d%02d%02d_%02d%02d%02d.fits", 
-				antdir,sname2,
-                                (tval->tm_year)+1900, tval->tm_mon + 1,
-                                tval->tm_mday,
-                                tval->tm_hour,
-                                tval->tm_min,
-                                tval->tm_sec);
-
-	dsm_status=dsm_write(DSM_HOST,"DSM_CCD_FITS_FILENAME_C100",snamefits);
-	if(dsm_status != DSM_SUCCESS) {
-                dsm_error_message(dsm_status,"dsm_write() filename");
-                }
-
-	dsm_status=dsm_write(DSM_HOST,"RM_SPECTRAL_TYPE_C10",sptype);
-	if(dsm_status != DSM_SUCCESS) {
-                dsm_error_message(dsm_status,"dsm_write() sptype");
-                }
-	dsm_status=dsm_write(DSM_HOST,"DSM_VISUAL_MAGNITUDE_F",&magnitude);
-	if(dsm_status != DSM_SUCCESS) {
-                dsm_error_message(dsm_status,"dsm_write() magnitude");
-                }
-#endif
 
 
 
@@ -2120,6 +2120,8 @@ if(sun_avoid_flag==1) {
            close(sockfdControl);
            close(sockfdMonitor);
             dsm_close();
+            freeReplyObject(redisResp);
+            redisFree(redisC);
 	    if (receivedSignal==SIGINT) exit(0);
 	    if (receivedSignal==SIGTERM) exit(-1);
 		user = -1;
@@ -2166,6 +2168,8 @@ if(sun_avoid_flag==1) {
           if (dsm_status != DSM_SUCCESS) {
           dsm_error_message(dsm_status,"dsm_read(DSM_AZOFF_ARCSEC_D)");
           }
+        sprintf(redisData,"HSET gltTrackUser azoff %lf",azoff);
+        redisResp = redisCommand(redisC,redisData);
 	az_offset_flag=1;
 		user = -1;
 	break;
@@ -2188,6 +2192,8 @@ for holography mapping */
 	SendLastCommandToDSM(lastCommand);
         dsm_status=dsm_read(DSM_HOST,"DSM_COMMANDED_ELOFF_ARCSEC_D",&eloff,&timeStamp);
 	dsm_status=dsm_write(DSM_HOST,"DSM_ELOFF_ARCSEC_D",&eloff);
+        sprintf(redisData,"HSET gltTrackUser eloff %lf",eloff);
+        redisResp = redisCommand(redisC,redisData);
         el_offset_flag=1;
 		user = -1;
 	break;
@@ -2322,6 +2328,10 @@ if needed for chopper beam offsets */
 	SendLastCommandToDSM(lastCommand);
 	dsm_status=dsm_read(DSM_HOST,"DSM_RAOFF_ARCSEC_D",&raOffset,&timeStamp);
 	dsm_status=dsm_read(DSM_HOST,"DSM_DECOFF_ARCSEC_D",&decOffset,&timeStamp);
+        sprintf(redisData,"HSET gltTrackUser raoff %lf",raOffset);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET gltTrackUser decoff %lf",decOffset);
+        redisResp = redisCommand(redisC,redisData);
 		icount=0;
 		if(target_flag==1) target_flag=0;
 		interrupt_command_flag=0;
@@ -2512,6 +2522,16 @@ printf("got new source: %s %d\n",sname,newSourceFlag);
 	dsm_status=dsm_write(DSM_HOST,"DSM_RA_APP_HR_D", &ra_disp);
 	dsm_status=dsm_write(DSM_HOST,"DSM_DEC_APP_DEG_D",&dec_disp);
 	dsm_status=dsm_write(DSM_HOST,"DSM_UTC_HR_D", &utc_disp);
+
+        sprintf(redisData,"HSET gltTrackComp hourAngle %lf",hourangle);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET gltTrackComp raApp %lf",ra_disp);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET gltTrackComp decApp %lf",dec_disp);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET gltTrackComp UTCh %lf",utc_disp);
+        redisResp = redisCommand(redisC,redisData);
+
 /* magnitude is actually velocity in this single dish version- in case
 we are observing sources other than stars for optical pointing */
         if(sol_sys_flag==0) dummyDouble=sourceVelocity;
@@ -2520,17 +2540,27 @@ we are observing sources other than stars for optical pointing */
                 magnitude=(float)radialVelocity;
                 }
 	dsm_status=dsm_write(DSM_HOST,"DSM_SVEL_KMPS_D",&dummyDouble);
+        sprintf(redisData,"HSET gltTrackUser svelkms %lf",radialVelocity);
+        redisResp = redisCommand(redisC,redisData);
 	if(sol_sys_flag==0) dummyshortint=0x1;
 	if(sol_sys_flag==1) dummyshortint=0x2;
 	dsm_status=dsm_write(DSM_HOST,"DSM_SVELTYPE_S",&dummyshortint);
+        sprintf(redisData,"HSET gltTrackUser sveltype %h",dummyshortint);
+        redisResp = redisCommand(redisC,redisData);
 
 	dummyDouble=latitude_degrees;
 	dsm_status=dsm_write(DSM_HOST,"DSM_LATITUDE_DEG_D", &dummyDouble);
+        sprintf(redisData,"HSET gltTrackFile latitude %lf",latitude_degrees);
+        redisResp = redisCommand(redisC,redisData);
 
 	dummyDouble= longitude_degrees;
 	dsm_status=dsm_write(DSM_HOST,"DSM_LONGITUDE_DEG_D",&dummyDouble);
+        sprintf(redisData,"HSET gltTrackFile longitude %lf",longitude_degrees);
+        redisResp = redisCommand(redisC,redisData);
 	drefraction=(double)refraction;
 	dsm_status=dsm_write(DSM_HOST,"DSM_REFRACTION_ARCSEC_D",&drefraction);
+        sprintf(redisData,"HSET gltTrackComp refraction %lf",drefraction);
+        redisResp = redisCommand(redisC,redisData);
 	if((drefraction<0.0)||(drefraction>4000.)) {
 	  strcpy(operatorErrorMessage, "Refraction correction failed.");
 /*
@@ -2618,6 +2648,8 @@ to RM ealier */
 
 	 dummyByte=(char)radio_flag;
 	dsm_status=dsm_write(DSM_HOST,"DSM_REFRACTION_RADIO_FLAG_B",&dummyByte);
+        sprintf(redisData,"HSET gltTrackComp refractionRadioFlag %d",radio_flag);
+        redisResp = redisCommand(redisC,redisData);
 
 /*
 	    ret = dsm_status=dsm_write(DSM_HOST,"DSM_SOURCE_C34",sname);
@@ -2626,19 +2658,33 @@ to RM ealier */
 	lst_disp_float=(float)lst_disp;
 	utc_disp_float=(float)utc_disp;
 	dsm_status=dsm_write(DSM_HOST,"DSM_LST_HOURS_F",&lst_disp_float);
+        sprintf(redisData,"HSET gltTrackComp lst %f",lst_disp_float);
+        redisResp = redisCommand(redisC,redisData);
 	dsm_status=dsm_write(DSM_HOST,"DSM_UTC_HOURS_F",&utc_disp_float);
 
 	dsm_status=dsm_write(DSM_HOST,"DSM_TJD_D",&tjd_disp);
+        sprintf(redisData,"HSET gltTrackComp tjd %lf",tjd_disp);
+        redisResp = redisCommand(redisC,redisData);
 
 	dummyFloat=(float)ra_cat_disp;
 	dsm_status=dsm_write(DSM_HOST,"DSM_RA_CAT_HOURS_F",&dummyFloat);
+        sprintf(redisData,"HSET gltTrackComp raCat %f",dummyFloat);
+        redisResp = redisCommand(redisC,redisData);
 	dummyFloat=(float)dec_cat_disp;
 	dsm_status=dsm_write(DSM_HOST,"DSM_DEC_CAT_DEG_F",&dummyFloat);
+        sprintf(redisData,"HSET gltTrackComp decCat %f",dummyFloat);
+        redisResp = redisCommand(redisC,redisData);
 
 	dsm_status=dsm_write(DSM_HOST,"DSM_EPOCH_F",&epoch);
+        sprintf(redisData,"HSET gltTrackUser epoch %f",epoch);
+        redisResp = redisCommand(redisC,redisData);
 
 	dsm_status=dsm_write(DSM_HOST,"DSM_ACTUAL_AZ_DEG_D",&az_actual_corrected);
 	dsm_status=dsm_write(DSM_HOST,"DSM_ACTUAL_EL_DEG_D",&el_actual_disp);
+        sprintf(redisData,"HSET gltTrackComp actualAz %lf",az_actual_corrected);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET gltTrackComp actualEl %lf",el_actual_disp);
+        redisResp = redisCommand(redisC,redisData);
 
      if(dsm_status != DSM_SUCCESS) {
                 dsm_error_message(dsm_status,"dsm_write() dsm_actual_az/el");
@@ -2646,6 +2692,10 @@ to RM ealier */
 
 	dsm_status=dsm_write(DSM_HOST,"DSM_PMDAZ_F",&pmdaz);
 	dsm_status=dsm_write(DSM_HOST,"DSM_PMDEL_F",&pmdel);
+        sprintf(redisData,"HSET gltTrackComp pmdaz %f",pmdaz);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET gltTrackComp pmdel %f",pmdel);
+        redisResp = redisCommand(redisC,redisData);
 
 	fflush(stdout);
 
@@ -2656,7 +2706,11 @@ to RM ealier */
 
   /* timestamp for DERS etc..*/
         dsm_status=dsm_read(DSM_HOST,"DSM_UNIX_TIME_L",&timestamp,&timeStamp);
+        sprintf(redisData,"HSET gltTrackComp unixTime %d",timeStamp);
+        redisResp = redisCommand(redisC,redisData);
         dsm_status=dsm_write(DSM_HOST,"DSM_TRACK_TIMESTAMP_L",&timestamp);
+        sprintf(redisData,"HSET gltTrackComp trackTimestamp %d",timestamp);
+        redisResp = redisCommand(redisC,redisData);
 /*
 printf("%d\n",timestamp);
 */
@@ -2966,6 +3020,8 @@ messagelength=strlen(messg);
 sprintf(blank,"                                                                                                   ");                      
 dsm_status=dsm_write(DSM_HOST,"DSM_TRACK_MESSAGE_C100",blank);
 dsm_status=dsm_write(DSM_HOST,"DSM_TRACK_MESSAGE_C100",messg);
+        sprintf(redisData,"HSET gltTrackComp trackMsg %s",messg);
+        redisResp = redisCommand(redisC,redisData);
 }
 
 void SendLastCommandToDSM(char *lastCommand)
@@ -2977,6 +3033,8 @@ messagelength=strlen(lastCommand);
 sprintf(blank,"                                                                                                   ");                      
 dsm_status=dsm_write(DSM_HOST,"DSM_TRACK_LAST_COMMAND_C100",blank);
 dsm_status=dsm_write(DSM_HOST,"DSM_TRACK_LAST_COMMAND_C100",lastCommand);
+        sprintf(redisData,"HSET gltTrackComp trackLastCmd %s",lastCommand);
+        redisResp = redisCommand(redisC,redisData);
 }
 
 double sunDistance(double az1,double el1,double az2,double el2)
@@ -3158,22 +3216,30 @@ printf("Time: %d\n",acuStatusResp.timeOfDay);
   if (dsm_status != DSM_SUCCESS) {
   printf("Warning: DSM write failed! DSM_AZ_POSN_DEG dsm_status=%d\n",dsm_status);
   }
+        sprintf(redisData,"HSET acu azPosn %lf",az);
+        redisResp = redisCommand(redisC,redisData);
 
   dsm_status = dsm_write(ACC,"DSM_EL_POSN_DEG_D",&el);
 
   if (dsm_status != DSM_SUCCESS) {
   printf("Warning: DSM write failed! DSM_EL_POSN_DEG dsm_status=%d\n",dsm_status);
   }
+        sprintf(redisData,"HSET acu elPosn %lf",el);
+        redisResp = redisCommand(redisC,redisData);
 
   dsm_status = dsm_write(ACC,"DSM_AZ_ACU_CMD_POSN_DEG_D",&acuCmdAz);
   if (dsm_status != DSM_SUCCESS) {
   printf("Warning: DSM write failed! DSM_AZ_ACU_CMD_POSN_DEG dsm_status=%d\n",dsm_status);
   }
+        sprintf(redisData,"HSET acu azCmdPosn %lf",acuCmdAz);
+        redisResp = redisCommand(redisC,redisData);
 
   dsm_status = dsm_write(ACC,"DSM_EL_ACU_CMD_POSN_DEG_D",&acuCmdEl);
   if (dsm_status != DSM_SUCCESS) {
   printf("Warning: DSM write failed! DSM_EL_ACU_CMD_POSN_DEG dsm_status=%d\n",dsm_status);
   }
+        sprintf(redisData,"HSET acu elCmdPosn %lf",acuCmdEl);
+        redisResp = redisCommand(redisC,redisData);
 
   az_tracking_error = (float)(acuCmdAz-az)*3600.;
   el_tracking_error = (float)(acuCmdEl-el)*3600.;
@@ -3185,12 +3251,16 @@ printf("Time: %d\n",acuStatusResp.timeOfDay);
   if (dsm_status != DSM_SUCCESS) {
   printf("Warning: DSM write failed! dsm_status=%d\n",dsm_status);
   }
+        sprintf(redisData,"HSET gltTrackComp azTrackingError %f",az_tracking_error);
+        redisResp = redisCommand(redisC,redisData);
 
   dsm_status = dsm_write(ACC,"DSM_EL_TRACKING_ERROR_F",&el_tracking_error);
 
   if (dsm_status != DSM_SUCCESS) {
   printf("Warning: DSM write failed! dsm_status=%d\n",dsm_status);
   }
+        sprintf(redisData,"HSET gltTrackComp elTrackingError %f",el_tracking_error);
+        redisResp = redisCommand(redisC,redisData);
 
   acuModeAz=acuStatusResp.azStatusMode;
   acuModeEl=acuStatusResp.elStatusMode;
@@ -3227,10 +3297,14 @@ printf("Time: %d\n",acuStatusResp.timeOfDay);
   if (dsm_status != DSM_SUCCESS) {
   printf("DSM write failed! DSM_ACU_DAYOFYEAR_L dsm_status=%d\n",dsm_status);
   }
+        sprintf(redisData,"HSET acu dayOfYear %d",acuDay);
+        redisResp = redisCommand(redisC,redisData);
   dsm_status = dsm_write(ACC,"DSM_ACU_HOUR_L",&acuHour);
   if (dsm_status != DSM_SUCCESS) {
   printf("DSM write failed! DSM_ACU_HOUR_L dsm_status=%d\n",dsm_status);
   }
+        sprintf(redisData,"HSET acu hour %d",acuHour);
+        redisResp = redisCommand(redisC,redisData);
 
 
 /*
@@ -3539,6 +3613,18 @@ printf("Time: %d\n",ioStatusResp.timeOfDay);
   dsm_status = dsm_write(ACC,"DSM_EL_MOTOR2_TEMP_S",&elmotor2temp);
   dsm_status = dsm_write(ACC,"DSM_EL_MOTOR3_TEMP_S",&elmotor3temp);
   dsm_status = dsm_write(ACC,"DSM_EL_MOTOR4_TEMP_S",&elmotor4temp);
+        sprintf(redisData,"HSET acu azMotor1Temp %h",azmotor1temp);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu azMotor2Temp %h",azmotor2temp);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu elMotor1Temp %h",elmotor1temp);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu elMotor2Temp %h",elmotor2temp);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu elMotor3Temp %h",elmotor3temp);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu elMotor4Temp %h",elmotor4temp);
+        redisResp = redisCommand(redisC,redisData);
 
   dsm_status = dsm_write(ACC,"DSM_AZ_MOTOR1_CURRENT_F",&az1motorcurrentF);
   dsm_status = dsm_write(ACC,"DSM_AZ_MOTOR2_CURRENT_F",&az2motorcurrentF);
@@ -3546,6 +3632,18 @@ printf("Time: %d\n",ioStatusResp.timeOfDay);
   dsm_status = dsm_write(ACC,"DSM_EL_MOTOR2_CURRENT_F",&el2motorcurrentF);
   dsm_status = dsm_write(ACC,"DSM_EL_MOTOR3_CURRENT_F",&el3motorcurrentF);
   dsm_status = dsm_write(ACC,"DSM_EL_MOTOR4_CURRENT_F",&el4motorcurrentF);
+        sprintf(redisData,"HSET acu azMotor1Current %f",az1motorcurrentF);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu azMotor2Current %f",az2motorcurrentF);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu elMotor1Current %f",el1motorcurrentF);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu elMotor2Current %f",el2motorcurrentF);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu elMotor3Current %f",el3motorcurrentF);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu elMotor4Current %f",el4motorcurrentF);
+        redisResp = redisCommand(redisC,redisData);
 
   if (dsm_status != DSM_SUCCESS) {
   printf("Warning: DSM write failed! dsm_status=%d\n",dsm_status);
@@ -3703,11 +3801,52 @@ printf("tempSensor1=%d,tempSensor2=%d,tempSensor3=%d\n",tempSensor[0],tempSensor
   printf("Warning: DSM write failed! metrology variables dsm_status=%d\n",dsm_status);
   }
 
+        sprintf(redisData,"HSET acu spemAzCorr %d",SPEMazCorr);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu spemElCorr %d",SPEMelCorr);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu linearSensorAzCorr %d",linearSensorAzCorr);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu linearSensorElCorr %d",linearSensorElCorr);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu tiltAzCorr %d",tiltAzCorr);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu tiltElCorr %d",tiltElCorr);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu linearSensor1 %d",linearSensor1);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu linearSensor2 %d",linearSensor2);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu linearSensor3 %d",linearSensor3);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu linearSensor4 %d",linearSensor4);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu tilt1Temp %d",tilt1Temp);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu tilt2Temp %d",tilt2Temp);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu tilt3Temp %d",tilt3Temp);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu tilt1x %d",tilt1x);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu tilt1y %d",tilt1y);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu tilt2x %d",tilt2x);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu tilt2y %d",tilt2y);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu tilt3x %d",tilt3x);
+        redisResp = redisCommand(redisC,redisData);
+        sprintf(redisData,"HSET acu tilt3y %d",tilt3y);
+        redisResp = redisCommand(redisC,redisData);
+
   }
 
   if (recvBuff[0]==0x2) {
   sprintf(acuErrorMessage,"ACU refuses the command...reason:");
   dsm_status = dsm_write(ACC,"DSM_ACU_ERROR_MESSAGE_C256",acuErrorMessage);
+        sprintf(redisData,"HSET acu errorMessage %s",acuErrorMessage);
+        redisResp = redisCommand(redisC,redisData);
   if (dsm_status != DSM_SUCCESS) {
   printf("DSM write failed! DSM_ACU_ERROR_MESSAGE_C256 dsm_status=%d\n",dsm_status);
   }
@@ -3724,6 +3863,8 @@ printf("tempSensor1=%d,tempSensor2=%d,tempSensor3=%d\n",tempSensor[0],tempSensor
   } else {sprintf(acuErrorMessage,"");}
 
   dsm_status = dsm_write(ACC,"DSM_ACU_ERROR_MESSAGE_C256",acuErrorMessage);
+        sprintf(redisData,"HSET acu errorMessage %s",acuErrorMessage);
+        redisResp = redisCommand(redisC,redisData);
   if (dsm_status != DSM_SUCCESS) {
   printf("DSM write failed! DSM_ACU_ERROR_MESSAGE_C256 dsm_status=%d\n",dsm_status);
   }
