@@ -131,6 +131,11 @@ void sidtim(double *tjdh,double *tjdl,int *k,double *gst);
 double sunDistance(double az1,double el1,double az2,double el2);
 double tjd2et(double tjd);
 
+void redisWriteShort(char *hashName, char *fieldName, short variable);
+void redisWriteInt(char *hashName, char *fieldName, int variable);
+void redisWriteFloat(char *hashName, char *fieldName,float variable);
+void redisWriteDouble(char *hashName, char *fieldName, double variable);
+void redisWriteString(char *hashName, char *fieldName, char *variable);
 
 /** Global variables *********************************************** */
 
@@ -216,7 +221,7 @@ int	cal_flag=0;
 char redisData[1024];
 redisContext *redisC;
 redisReply *redisResp;
-struct timeval redisTimeout = {2,500000}; /*1.5 seconds for redis timeout */
+struct timeval redisTimeout = {1,500000}; /*1.5 seconds for redis timeout */
 
 /*end of global variables***************************************************/
 
@@ -522,7 +527,10 @@ double et_prev_big_time_step=0.,et_time_interval;
 
      int acuCurrentMode=0;
 
+/*
      int loop_time = 250000;
+*/
+     int loop_time = 500000;
 
     /* END OF VARIABLE DECLARATIONS */
 
@@ -806,14 +814,10 @@ new_source:
         dsm_status=dsm_write(DSM_HOST,"DSM_POLAR_DUT_SECONDS_F",&polar_dut_f);
 	fclose(fp_polar);
 
-        sprintf(redisData,"HSET gltTrackFile polarMJD %d ",polar_mjd);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET gltTrackFile polarDX %f ",polar_dx_f);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET gltTrackFile polarDY %f ",polar_dy_f);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET gltTrackFile polarDUT %f ",polar_dut_f);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteInt("gltTrackFile","polarMJD",polar_mjd);
+        redisWriteFloat("gltTrackFile","polarDX",polar_dx_f);
+        redisWriteFloat("gltTrackFile","polarDY",polar_dy_f);
+        redisWriteFloat("gltTrackFile","polarDUT",polar_dut_f);
 
 
     print_upper(sname);
@@ -990,8 +994,7 @@ new_source:
         if(dsm_status != DSM_SUCCESS) {
                 dsm_error_message(dsm_status,"dsm_write() solsysflag");
                 }
-        sprintf(redisData,"HSET gltTrackComp solsysFlag %h",sol_sys_flag);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteShort("gltTrackComp","solsysFlag",dummyshortint);
  
 
 
@@ -1011,10 +1014,8 @@ new_source:
 	dsm_status=dsm_read(DSM_HOST,"DSM_RAOFF_ARCSEC_D",&raOffset,&timeStamp);
 	dsm_status=dsm_read(DSM_HOST,"DSM_DECOFF_ARCSEC_D",&decOffset,&timeStamp);
 
-        sprintf(redisData,"HSET gltTrackUser raoff %lf",raOffset);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET gltTrackUser decoff %lf",decOffset);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteDouble("gltTrackuser","raoff",raOffset);
+        redisWriteDouble("gltTrackuser","decoff",decOffset);
 
 
     /*
@@ -1733,10 +1734,8 @@ for the actual positions*/
 	el_disp_rm = el_disp / radian;
 	dsm_status=dsm_write(DSM_HOST,"DSM_CMDDISP_AZ_DEG_D",&az_disp_rm);
 	dsm_status=dsm_write(DSM_HOST,"DSM_CMDDISP_EL_DEG_D",&el_disp_rm);
-        sprintf(redisData,"HSET gltTrackComp cmdAz %lf",az_disp_rm);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET gltTrackComp cmdEl %lf",el_disp_rm);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteDouble("gltTrackComp","cmdAz",az_disp_rm);
+        redisWriteDouble("gltTrackComp","cmdEl",el_disp_rm);
 
 
 	hour_angle = hangle2 * 12.0 / pi;
@@ -2066,10 +2065,8 @@ if(sun_avoid_flag==1) {
 	eloff_int=(short)eloff;
 	dsm_status=dsm_write(DSM_HOST,"DSM_AZOFF_ARCSEC_D",&azoff);
 	dsm_status=dsm_write(DSM_HOST,"DSM_ELOFF_ARCSEC_D",&eloff);
-        sprintf(redisData,"HSET gltTrackUser azoff %lf",azoff);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET gltTrackUser eloff %lf",eloff);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteDouble("gltTrackUser","azoff",azoff);
+        redisWriteDouble("gltTrackUser","eloff",eloff);
 
 
 
@@ -2168,8 +2165,7 @@ if(sun_avoid_flag==1) {
           if (dsm_status != DSM_SUCCESS) {
           dsm_error_message(dsm_status,"dsm_read(DSM_AZOFF_ARCSEC_D)");
           }
-        sprintf(redisData,"HSET gltTrackUser azoff %lf",azoff);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteDouble("gltTrackuser","azoff",azoff);
 	az_offset_flag=1;
 		user = -1;
 	break;
@@ -2192,8 +2188,7 @@ for holography mapping */
 	SendLastCommandToDSM(lastCommand);
         dsm_status=dsm_read(DSM_HOST,"DSM_COMMANDED_ELOFF_ARCSEC_D",&eloff,&timeStamp);
 	dsm_status=dsm_write(DSM_HOST,"DSM_ELOFF_ARCSEC_D",&eloff);
-        sprintf(redisData,"HSET gltTrackUser eloff %lf",eloff);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteDouble("gltTrackuser","eloff",eloff);
         el_offset_flag=1;
 		user = -1;
 	break;
@@ -2328,10 +2323,8 @@ if needed for chopper beam offsets */
 	SendLastCommandToDSM(lastCommand);
 	dsm_status=dsm_read(DSM_HOST,"DSM_RAOFF_ARCSEC_D",&raOffset,&timeStamp);
 	dsm_status=dsm_read(DSM_HOST,"DSM_DECOFF_ARCSEC_D",&decOffset,&timeStamp);
-        sprintf(redisData,"HSET gltTrackUser raoff %lf",raOffset);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET gltTrackUser decoff %lf",decOffset);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteDouble("gltTrackuser","raoff",raOffset);
+        redisWriteDouble("gltTrackuser","decoff",decOffset);
 		icount=0;
 		if(target_flag==1) target_flag=0;
 		interrupt_command_flag=0;
@@ -2523,14 +2516,10 @@ printf("got new source: %s %d\n",sname,newSourceFlag);
 	dsm_status=dsm_write(DSM_HOST,"DSM_DEC_APP_DEG_D",&dec_disp);
 	dsm_status=dsm_write(DSM_HOST,"DSM_UTC_HR_D", &utc_disp);
 
-        sprintf(redisData,"HSET gltTrackComp hourAngle %lf",hourangle);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET gltTrackComp raApp %lf",ra_disp);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET gltTrackComp decApp %lf",dec_disp);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET gltTrackComp UTCh %lf",utc_disp);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteDouble("gltTrackComp","hourAngle",hourangle);
+        redisWriteDouble("gltTrackComp","raApp",ra_disp);
+        redisWriteDouble("gltTrackComp","decApp",dec_disp);
+        redisWriteDouble("gltTrackComp","UTCh",utc_disp);
 
 /* magnitude is actually velocity in this single dish version- in case
 we are observing sources other than stars for optical pointing */
@@ -2540,27 +2529,23 @@ we are observing sources other than stars for optical pointing */
                 magnitude=(float)radialVelocity;
                 }
 	dsm_status=dsm_write(DSM_HOST,"DSM_SVEL_KMPS_D",&dummyDouble);
-        sprintf(redisData,"HSET gltTrackUser svelkms %lf",radialVelocity);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteDouble("gltTrackUser","svelkms",radialVelocity);
 	if(sol_sys_flag==0) dummyshortint=0x1;
 	if(sol_sys_flag==1) dummyshortint=0x2;
 	dsm_status=dsm_write(DSM_HOST,"DSM_SVELTYPE_S",&dummyshortint);
-        sprintf(redisData,"HSET gltTrackUser sveltype %h",dummyshortint);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteShort("gltTrackUser","sveltype",dummyshortint);
 
 	dummyDouble=latitude_degrees;
 	dsm_status=dsm_write(DSM_HOST,"DSM_LATITUDE_DEG_D", &dummyDouble);
-        sprintf(redisData,"HSET gltTrackFile latitude %lf",latitude_degrees);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteDouble("gltTrackFile","latitude",latitude_degrees);
 
 	dummyDouble= longitude_degrees;
 	dsm_status=dsm_write(DSM_HOST,"DSM_LONGITUDE_DEG_D",&dummyDouble);
-        sprintf(redisData,"HSET gltTrackFile longitude %lf",longitude_degrees);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteDouble("gltTrackFile","longitude",longitude_degrees);
+
 	drefraction=(double)refraction;
 	dsm_status=dsm_write(DSM_HOST,"DSM_REFRACTION_ARCSEC_D",&drefraction);
-        sprintf(redisData,"HSET gltTrackComp refraction %lf",drefraction);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteDouble("gltTrackComp","refraction",drefraction);
 	if((drefraction<0.0)||(drefraction>4000.)) {
 	  strcpy(operatorErrorMessage, "Refraction correction failed.");
 /*
@@ -2648,8 +2633,7 @@ to RM ealier */
 
 	 dummyByte=(char)radio_flag;
 	dsm_status=dsm_write(DSM_HOST,"DSM_REFRACTION_RADIO_FLAG_B",&dummyByte);
-        sprintf(redisData,"HSET gltTrackComp refractionRadioFlag %d",radio_flag);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteInt("gltTrackComp","refractionRadioFlag",radio_flag);
 
 /*
 	    ret = dsm_status=dsm_write(DSM_HOST,"DSM_SOURCE_C34",sname);
@@ -2658,33 +2642,26 @@ to RM ealier */
 	lst_disp_float=(float)lst_disp;
 	utc_disp_float=(float)utc_disp;
 	dsm_status=dsm_write(DSM_HOST,"DSM_LST_HOURS_F",&lst_disp_float);
-        sprintf(redisData,"HSET gltTrackComp lst %f",lst_disp_float);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteFloat("gltTrackComp","lst",lst_disp_float);
 	dsm_status=dsm_write(DSM_HOST,"DSM_UTC_HOURS_F",&utc_disp_float);
 
 	dsm_status=dsm_write(DSM_HOST,"DSM_TJD_D",&tjd_disp);
-        sprintf(redisData,"HSET gltTrackComp tjd %lf",tjd_disp);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteDouble("gltTrackComp","tjd",tjd_disp);
 
 	dummyFloat=(float)ra_cat_disp;
 	dsm_status=dsm_write(DSM_HOST,"DSM_RA_CAT_HOURS_F",&dummyFloat);
-        sprintf(redisData,"HSET gltTrackComp raCat %f",dummyFloat);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteFloat("gltTrackComp","raCat",dummyFloat);
 	dummyFloat=(float)dec_cat_disp;
 	dsm_status=dsm_write(DSM_HOST,"DSM_DEC_CAT_DEG_F",&dummyFloat);
-        sprintf(redisData,"HSET gltTrackComp decCat %f",dummyFloat);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteFloat("gltTrackComp","decCat",dummyFloat);
 
 	dsm_status=dsm_write(DSM_HOST,"DSM_EPOCH_F",&epoch);
-        sprintf(redisData,"HSET gltTrackUser epoch %f",epoch);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteFloat("gltTrackUser","epoch",epoch);
 
 	dsm_status=dsm_write(DSM_HOST,"DSM_ACTUAL_AZ_DEG_D",&az_actual_corrected);
 	dsm_status=dsm_write(DSM_HOST,"DSM_ACTUAL_EL_DEG_D",&el_actual_disp);
-        sprintf(redisData,"HSET gltTrackComp actualAz %lf",az_actual_corrected);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET gltTrackComp actualEl %lf",el_actual_disp);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteDouble("gltTrackComp","actualAz",az_actual_corrected);
+        redisWriteDouble("gltTrackComp","actualEl",el_actual_disp);
 
      if(dsm_status != DSM_SUCCESS) {
                 dsm_error_message(dsm_status,"dsm_write() dsm_actual_az/el");
@@ -2692,10 +2669,8 @@ to RM ealier */
 
 	dsm_status=dsm_write(DSM_HOST,"DSM_PMDAZ_F",&pmdaz);
 	dsm_status=dsm_write(DSM_HOST,"DSM_PMDEL_F",&pmdel);
-        sprintf(redisData,"HSET gltTrackComp pmdaz %f",pmdaz);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET gltTrackComp pmdel %f",pmdel);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteFloat("gltTrackComp","pmdaz",pmdaz);
+        redisWriteFloat("gltTrackComp","pmdel",pmdel);
 
 	fflush(stdout);
 
@@ -2706,11 +2681,9 @@ to RM ealier */
 
   /* timestamp for DERS etc..*/
         dsm_status=dsm_read(DSM_HOST,"DSM_UNIX_TIME_L",&timestamp,&timeStamp);
-        sprintf(redisData,"HSET gltTrackComp unixTime %d",timeStamp);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteInt("gltTrackComp","unixTime",timeStamp);
         dsm_status=dsm_write(DSM_HOST,"DSM_TRACK_TIMESTAMP_L",&timestamp);
-        sprintf(redisData,"HSET gltTrackComp trackTimestamp %d",timestamp);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteInt("gltTrackComp","trackTimestamp",timestamp);
 /*
 printf("%d\n",timestamp);
 */
@@ -3020,8 +2993,7 @@ messagelength=strlen(messg);
 sprintf(blank,"                                                                                                   ");                      
 dsm_status=dsm_write(DSM_HOST,"DSM_TRACK_MESSAGE_C100",blank);
 dsm_status=dsm_write(DSM_HOST,"DSM_TRACK_MESSAGE_C100",messg);
-        sprintf(redisData,"HSET gltTrackComp trackMsg %s",messg);
-        redisResp = redisCommand(redisC,redisData);
+        redisWriteString("gltTrackComp","trackMsg",messg);
 }
 
 void SendLastCommandToDSM(char *lastCommand)
@@ -3033,7 +3005,35 @@ messagelength=strlen(lastCommand);
 sprintf(blank,"                                                                                                   ");                      
 dsm_status=dsm_write(DSM_HOST,"DSM_TRACK_LAST_COMMAND_C100",blank);
 dsm_status=dsm_write(DSM_HOST,"DSM_TRACK_LAST_COMMAND_C100",lastCommand);
-        sprintf(redisData,"HSET gltTrackComp trackLastCmd %s",lastCommand);
+        redisWriteString("gltTrackComp","trackLastCmd",lastCommand);
+}
+
+/* Functions to write data  to Redis */
+
+void redisWriteShort(char *hashName, char *fieldName, short variable)
+{
+        sprintf(redisData,"HSET %s %s %h",hashName,fieldName,variable);
+        redisResp = redisCommand(redisC,redisData);
+}
+
+void redisWriteInt(char *hashName, char *fieldName, int variable)
+{
+        sprintf(redisData,"HSET %s %s %d",hashName,fieldName,variable);
+        redisResp = redisCommand(redisC,redisData);
+}
+void redisWriteFloat(char *hashName, char *fieldName,float variable)
+{
+        sprintf(redisData,"HSET %s %s %f",hashName,fieldName,variable);
+        redisResp = redisCommand(redisC,redisData);
+}
+void redisWriteDouble(char *hashName, char *fieldName, double variable)
+{
+        sprintf(redisData,"HSET %s %s %lf",hashName,fieldName,variable);
+        redisResp = redisCommand(redisC,redisData);
+}
+void redisWriteString(char *hashName, char *fieldName, char *variable)
+{
+        sprintf(redisData,"HSET %s %s %s",hashName,fieldName,variable);
         redisResp = redisCommand(redisC,redisData);
 }
 
@@ -3801,44 +3801,26 @@ printf("tempSensor1=%d,tempSensor2=%d,tempSensor3=%d\n",tempSensor[0],tempSensor
   printf("Warning: DSM write failed! metrology variables dsm_status=%d\n",dsm_status);
   }
 
-        sprintf(redisData,"HSET acu spemAzCorr %d",SPEMazCorr);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET acu spemElCorr %d",SPEMelCorr);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET acu linearSensorAzCorr %d",linearSensorAzCorr);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET acu linearSensorElCorr %d",linearSensorElCorr);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET acu tiltAzCorr %d",tiltAzCorr);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET acu tiltElCorr %d",tiltElCorr);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET acu linearSensor1 %d",linearSensor1);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET acu linearSensor2 %d",linearSensor2);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET acu linearSensor3 %d",linearSensor3);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET acu linearSensor4 %d",linearSensor4);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET acu tilt1Temp %d",tilt1Temp);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET acu tilt2Temp %d",tilt2Temp);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET acu tilt3Temp %d",tilt3Temp);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET acu tilt1x %d",tilt1x);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET acu tilt1y %d",tilt1y);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET acu tilt2x %d",tilt2x);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET acu tilt2y %d",tilt2y);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET acu tilt3x %d",tilt3x);
-        redisResp = redisCommand(redisC,redisData);
-        sprintf(redisData,"HSET acu tilt3y %d",tilt3y);
-        redisResp = redisCommand(redisC,redisData);
+        
+        redisWriteInt("acu","spemAzCorr",SPEMazCorr);
+        redisWriteInt("acu","spemElCorr",SPEMelCorr);
+        redisWriteInt("acu","linearSensorAzCorr",linearSensorAzCorr);
+        redisWriteInt("acu","linearSensorElCorr",linearSensorElCorr);
+        redisWriteInt("acu","tiltAzCorr",tiltAzCorr);
+        redisWriteInt("acu","tiltElCorr",tiltElCorr);
+        redisWriteInt("acu","linearSensor1",linearSensor1);
+        redisWriteInt("acu","linearSensor2",linearSensor2);
+        redisWriteInt("acu","linearSensor3",linearSensor3);
+        redisWriteInt("acu","linearSensor4",linearSensor4);
+        redisWriteInt("acu","tilt1Temp",tilt1Temp);
+        redisWriteInt("acu","tilt2Temp",tilt2Temp);
+        redisWriteInt("acu","tilt3Temp",tilt3Temp);
+        redisWriteInt("acu","tilt1x",tilt1x);
+        redisWriteInt("acu","tilt1y",tilt1y);
+        redisWriteInt("acu","tilt2x",tilt2x);
+        redisWriteInt("acu","tilt2y",tilt2y);
+        redisWriteInt("acu","tilt3x",tilt3x);
+        redisWriteInt("acu","tilt3y",tilt3y);
 
   }
 
