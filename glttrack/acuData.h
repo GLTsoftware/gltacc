@@ -220,3 +220,22 @@ typedef struct __attribute__ ((packed)) selfTestResults {
    short checksum;
    char etx;
 } selfTestResults;
+
+typedef struct __attribute__ ((packed)) twoLineTrack {
+   char stx;
+   char id;
+   short datalength;
+   char currentTLEline0[24];
+   char currentTLEline1[69];
+   char currentTLEline2[69];
+   int nextSampleTimeOfDay;
+   int nextSampleDayofYear;
+   int nextSampleAzimuth;
+   int nextSampleElevation;
+   int LOStimeOfDay;
+   int LOSDayOfYear;
+   int LOSAzimuth;
+   int LOSElevation;
+   short checksum;
+   char etx;
+} twoLineTrack;
