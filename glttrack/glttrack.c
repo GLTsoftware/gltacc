@@ -814,10 +814,12 @@ new_source:
         dsm_status=dsm_write(DSM_HOST,"DSM_POLAR_DUT_SECONDS_F",&polar_dut_f);
 	fclose(fp_polar);
 
+/*
         redisWriteInt("gltTrackFile","polarMJD",polar_mjd);
         redisWriteFloat("gltTrackFile","polarDX",polar_dx_f);
         redisWriteFloat("gltTrackFile","polarDY",polar_dy_f);
         redisWriteFloat("gltTrackFile","polarDUT",polar_dut_f);
+*/
 
 
     print_upper(sname);
@@ -994,7 +996,9 @@ new_source:
         if(dsm_status != DSM_SUCCESS) {
                 dsm_error_message(dsm_status,"dsm_write() solsysflag");
                 }
+/*
         redisWriteShort("gltTrackComp","solsysFlag",dummyshortint);
+*/
  
 
 
@@ -1014,8 +1018,10 @@ new_source:
 	dsm_status=dsm_read(DSM_HOST,"DSM_RAOFF_ARCSEC_D",&raOffset,&timeStamp);
 	dsm_status=dsm_read(DSM_HOST,"DSM_DECOFF_ARCSEC_D",&decOffset,&timeStamp);
 
+/*
         redisWriteDouble("gltTrackuser","raoff",raOffset);
         redisWriteDouble("gltTrackuser","decoff",decOffset);
+*/
 
 
     /*
@@ -1734,8 +1740,10 @@ for the actual positions*/
 	el_disp_rm = el_disp / radian;
 	dsm_status=dsm_write(DSM_HOST,"DSM_CMDDISP_AZ_DEG_D",&az_disp_rm);
 	dsm_status=dsm_write(DSM_HOST,"DSM_CMDDISP_EL_DEG_D",&el_disp_rm);
+/*
         redisWriteDouble("gltTrackComp","cmdAz",az_disp_rm);
         redisWriteDouble("gltTrackComp","cmdEl",el_disp_rm);
+*/
 
 
 	hour_angle = hangle2 * 12.0 / pi;
@@ -2065,8 +2073,10 @@ if(sun_avoid_flag==1) {
 	eloff_int=(short)eloff;
 	dsm_status=dsm_write(DSM_HOST,"DSM_AZOFF_ARCSEC_D",&azoff);
 	dsm_status=dsm_write(DSM_HOST,"DSM_ELOFF_ARCSEC_D",&eloff);
+/*
         redisWriteDouble("gltTrackUser","azoff",azoff);
         redisWriteDouble("gltTrackUser","eloff",eloff);
+*/
 
 
 
@@ -2165,7 +2175,9 @@ if(sun_avoid_flag==1) {
           if (dsm_status != DSM_SUCCESS) {
           dsm_error_message(dsm_status,"dsm_read(DSM_AZOFF_ARCSEC_D)");
           }
+/*
         redisWriteDouble("gltTrackuser","azoff",azoff);
+*/
 	az_offset_flag=1;
 		user = -1;
 	break;
@@ -2188,7 +2200,9 @@ for holography mapping */
 	SendLastCommandToDSM(lastCommand);
         dsm_status=dsm_read(DSM_HOST,"DSM_COMMANDED_ELOFF_ARCSEC_D",&eloff,&timeStamp);
 	dsm_status=dsm_write(DSM_HOST,"DSM_ELOFF_ARCSEC_D",&eloff);
+/*
         redisWriteDouble("gltTrackuser","eloff",eloff);
+*/
         el_offset_flag=1;
 		user = -1;
 	break;
@@ -2323,8 +2337,10 @@ if needed for chopper beam offsets */
 	SendLastCommandToDSM(lastCommand);
 	dsm_status=dsm_read(DSM_HOST,"DSM_RAOFF_ARCSEC_D",&raOffset,&timeStamp);
 	dsm_status=dsm_read(DSM_HOST,"DSM_DECOFF_ARCSEC_D",&decOffset,&timeStamp);
+/*
         redisWriteDouble("gltTrackuser","raoff",raOffset);
         redisWriteDouble("gltTrackuser","decoff",decOffset);
+*/
 		icount=0;
 		if(target_flag==1) target_flag=0;
 		interrupt_command_flag=0;
@@ -2516,10 +2532,12 @@ printf("got new source: %s %d\n",sname,newSourceFlag);
 	dsm_status=dsm_write(DSM_HOST,"DSM_DEC_APP_DEG_D",&dec_disp);
 	dsm_status=dsm_write(DSM_HOST,"DSM_UTC_HR_D", &utc_disp);
 
+/*
         redisWriteDouble("gltTrackComp","hourAngle",hourangle);
         redisWriteDouble("gltTrackComp","raApp",ra_disp);
         redisWriteDouble("gltTrackComp","decApp",dec_disp);
         redisWriteDouble("gltTrackComp","UTCh",utc_disp);
+*/
 
 /* magnitude is actually velocity in this single dish version- in case
 we are observing sources other than stars for optical pointing */
@@ -2529,23 +2547,33 @@ we are observing sources other than stars for optical pointing */
                 magnitude=(float)radialVelocity;
                 }
 	dsm_status=dsm_write(DSM_HOST,"DSM_SVEL_KMPS_D",&dummyDouble);
+/*
         redisWriteDouble("gltTrackUser","svelkms",radialVelocity);
+*/
 	if(sol_sys_flag==0) dummyshortint=0x1;
 	if(sol_sys_flag==1) dummyshortint=0x2;
 	dsm_status=dsm_write(DSM_HOST,"DSM_SVELTYPE_S",&dummyshortint);
+/*
         redisWriteShort("gltTrackUser","sveltype",dummyshortint);
+*/
 
 	dummyDouble=latitude_degrees;
 	dsm_status=dsm_write(DSM_HOST,"DSM_LATITUDE_DEG_D", &dummyDouble);
+/*
         redisWriteDouble("gltTrackFile","latitude",latitude_degrees);
+*/
 
 	dummyDouble= longitude_degrees;
 	dsm_status=dsm_write(DSM_HOST,"DSM_LONGITUDE_DEG_D",&dummyDouble);
+/*
         redisWriteDouble("gltTrackFile","longitude",longitude_degrees);
+*/
 
 	drefraction=(double)refraction;
 	dsm_status=dsm_write(DSM_HOST,"DSM_REFRACTION_ARCSEC_D",&drefraction);
+/*
         redisWriteDouble("gltTrackComp","refraction",drefraction);
+*/
 	if((drefraction<0.0)||(drefraction>4000.)) {
 	  strcpy(operatorErrorMessage, "Refraction correction failed.");
 /*
@@ -2633,7 +2661,9 @@ to RM ealier */
 
 	 dummyByte=(char)radio_flag;
 	dsm_status=dsm_write(DSM_HOST,"DSM_REFRACTION_RADIO_FLAG_B",&dummyByte);
+/*
         redisWriteInt("gltTrackComp","refractionRadioFlag",radio_flag);
+*/
 
 /*
 	    ret = dsm_status=dsm_write(DSM_HOST,"DSM_SOURCE_C34",sname);
@@ -2642,26 +2672,38 @@ to RM ealier */
 	lst_disp_float=(float)lst_disp;
 	utc_disp_float=(float)utc_disp;
 	dsm_status=dsm_write(DSM_HOST,"DSM_LST_HOURS_F",&lst_disp_float);
+/*
         redisWriteFloat("gltTrackComp","lst",lst_disp_float);
+*/
 	dsm_status=dsm_write(DSM_HOST,"DSM_UTC_HOURS_F",&utc_disp_float);
 
 	dsm_status=dsm_write(DSM_HOST,"DSM_TJD_D",&tjd_disp);
+/*
         redisWriteDouble("gltTrackComp","tjd",tjd_disp);
+*/
 
 	dummyFloat=(float)ra_cat_disp;
 	dsm_status=dsm_write(DSM_HOST,"DSM_RA_CAT_HOURS_F",&dummyFloat);
+/*
         redisWriteFloat("gltTrackComp","raCat",dummyFloat);
+*/
 	dummyFloat=(float)dec_cat_disp;
 	dsm_status=dsm_write(DSM_HOST,"DSM_DEC_CAT_DEG_F",&dummyFloat);
+/*
         redisWriteFloat("gltTrackComp","decCat",dummyFloat);
+*/
 
 	dsm_status=dsm_write(DSM_HOST,"DSM_EPOCH_F",&epoch);
+/*
         redisWriteFloat("gltTrackUser","epoch",epoch);
+*/
 
 	dsm_status=dsm_write(DSM_HOST,"DSM_ACTUAL_AZ_DEG_D",&az_actual_corrected);
 	dsm_status=dsm_write(DSM_HOST,"DSM_ACTUAL_EL_DEG_D",&el_actual_disp);
+/*
         redisWriteDouble("gltTrackComp","actualAz",az_actual_corrected);
         redisWriteDouble("gltTrackComp","actualEl",el_actual_disp);
+*/
 
      if(dsm_status != DSM_SUCCESS) {
                 dsm_error_message(dsm_status,"dsm_write() dsm_actual_az/el");
@@ -2669,8 +2711,10 @@ to RM ealier */
 
 	dsm_status=dsm_write(DSM_HOST,"DSM_PMDAZ_F",&pmdaz);
 	dsm_status=dsm_write(DSM_HOST,"DSM_PMDEL_F",&pmdel);
+/*
         redisWriteFloat("gltTrackComp","pmdaz",pmdaz);
         redisWriteFloat("gltTrackComp","pmdel",pmdel);
+*/
 
 	fflush(stdout);
 
@@ -2681,9 +2725,13 @@ to RM ealier */
 
   /* timestamp for DERS etc..*/
         dsm_status=dsm_read(DSM_HOST,"DSM_UNIX_TIME_L",&timestamp,&timeStamp);
+/*
         redisWriteInt("gltTrackComp","unixTime",timeStamp);
+*/
         dsm_status=dsm_write(DSM_HOST,"DSM_TRACK_TIMESTAMP_L",&timestamp);
+/*
         redisWriteInt("gltTrackComp","trackTimestamp",timestamp);
+*/
 /*
 printf("%d\n",timestamp);
 */
@@ -2993,7 +3041,9 @@ messagelength=strlen(messg);
 sprintf(blank,"                                                                                                   ");                      
 dsm_status=dsm_write(DSM_HOST,"DSM_TRACK_MESSAGE_C100",blank);
 dsm_status=dsm_write(DSM_HOST,"DSM_TRACK_MESSAGE_C100",messg);
+/*
         redisWriteString("gltTrackComp","trackMsg",messg);
+*/
 }
 
 void SendLastCommandToDSM(char *lastCommand)
@@ -3005,7 +3055,9 @@ messagelength=strlen(lastCommand);
 sprintf(blank,"                                                                                                   ");                      
 dsm_status=dsm_write(DSM_HOST,"DSM_TRACK_LAST_COMMAND_C100",blank);
 dsm_status=dsm_write(DSM_HOST,"DSM_TRACK_LAST_COMMAND_C100",lastCommand);
+/*
         redisWriteString("gltTrackComp","trackLastCmd",lastCommand);
+*/
 }
 
 /* Functions to write data  to Redis */
