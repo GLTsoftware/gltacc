@@ -2907,7 +2907,7 @@ is_planet(char *s, int *flag, int *id)
     {
 	*id = 378;
 	*flag = 1;
-    } else if (!strcmp(s, "comet103p           "))
+    } else if (!strcmp(s, "comet_a3            "))
     {
   	*id = 385;
 	*flag = 1;
