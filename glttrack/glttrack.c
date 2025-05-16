@@ -18,6 +18,16 @@ version 2.1
 2 Feb 2021
 Added Redis writes, to eventually replace DSM.
 
+version 3.0
+14 May 2025 NAP
+This is from github- 17 Mar 2023 version.
+A later version from November 2024 had Two Line mode- but that produced
+timing delays and many operations such as scans, pointing, did not work.
+In this present version, updates are made to all the ACU communications program
+to fix the error of byte order in checksum and data length variables. These errors were
+diagnosed on 26 November 2024, and all the low-level acuCommand C codes were updated.
+The same fixes are now applied here in this version of glttrack.c
+
 *****************************************************************/
 
 #include <stdio.h>
@@ -25,6 +35,8 @@ Added Redis writes, to eventually replace DSM.
 #include <signal.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <stddef.h>
+#include <endian.h>
 #include <math.h>
 #include <sys/types.h>
 #include <sys/mman.h>
@@ -117,6 +129,7 @@ int ACUAzEl(double cmdAzdeg, double cmdEldeg);
 int ACUAzElRate(double cmdAzRate, double cmdElRate);
 int ACUprogTrack(int numPos, int timeOfDay[], int azProgTrack[], int elProgTrack[],short clearstack);
 short checkSum (char *buff, int size);
+short calculate_checksum (char *buff, int size);
 void SendMessageToDSM(char *messg);
 void SendLastCommandToDSM(char *lastCommand);       
 void            local(double *lst, double *ra, double *dec, double *az, double *el, double *tjd, double *azoff, double *eloff, float *pressure, float *temperature, float *humidity, int *radio_flag, float *refraction, float *pmdaz, float *pmdel,  short *target_flag, double *commanded_az,double *commanded_el);
@@ -3177,13 +3190,24 @@ void *ACUstatus() {
   char azServoStatus[2],elServoStatus[2];
   int acuDay,acuHour;
   char acuErrorMessage[256],acuSystemGS[6];
+  short checksum;
 
 
   acuCommand.stx = 0x2;
   acuCommand.id = 0x71;
-  acuCommand.datalength = 0x7;
-  acuCommand.checksum = 0x78;
+  acuCommand.datalength = htole16(0x7);
+/*
+  acuCommand.checksum = htole16(calculate_checksum(
+                   (char *)&acuCommand.id, offsetof(acuCmd, checksum) - offsetof(acuCmd,id)));
+*/
   acuCommand.etx = 0x3;
+
+  checksum = checkSum((char*)(&acuCommand), sizeof(acuCommand));
+
+   if(checksum > 0xffff) checksum=checksum & 0xffff;
+
+   acuCommand.checksum = htole16(checksum);
+
 
   memset(recvBuff, '0' ,sizeof(recvBuff));
   memset(sendBuff, '0' ,sizeof(sendBuff));
@@ -3558,6 +3582,7 @@ void *ACUiostatus() {
   struct sockaddr_in serv_addr;
   ioStatus ioStatusResp;
   acuCmd acuCommand={};
+  short checksum;
 
   short azmotor1temp;
   short azmotor2temp;
@@ -3583,9 +3608,20 @@ void *ACUiostatus() {
 
   acuCommand.stx = 0x2;
   acuCommand.id = 0x51;
-  acuCommand.datalength = 0x7;
-  acuCommand.checksum = 0x58;
+  acuCommand.datalength = htole16(0x7);
+/*
+  acuCommand.checksum = htole16(calculate_checksum(
+                   (char *)&acuCommand.id, offsetof(acuCmd, checksum) - offsetof(acuCmd,id)));
+*/
   acuCommand.etx = 0x3;
+
+   checksum = checkSum((char*)(&acuCommand), sizeof(acuCommand));
+
+   if(checksum > 0xffff) checksum=checksum & 0xffff;
+
+   acuCommand.checksum = htole16(checksum);
+
+
 
   memset(recvBuff, '0' ,sizeof(recvBuff));
   memset(sendBuff, '0' ,sizeof(sendBuff));
@@ -3747,6 +3783,7 @@ void *ACUmetrology() {
   acuStatus acuStatusResp;
   acuCmd acuCommand={};
   metrologyData metrologyDataSet;
+  short checksum;
 
   char acuErrorMessage[256],generalMetStatus[4];
   int tilt1x,tilt1y,tilt2x,tilt2y,tilt3x,tilt3y;
@@ -3759,9 +3796,23 @@ void *ACUmetrology() {
   
   acuCommand.stx = 0x2;
   acuCommand.id = 0x76;
-  acuCommand.datalength = 0x7;
+  acuCommand.datalength = htole16(0x7);
+/*
   acuCommand.checksum = 0x7D;
+*/
+ /*
+  acuCommand.checksum = htole16(calculate_checksum(
+                   (char *)&acuCommand.id, offsetof(acuCmd, checksum) - offsetof(acuCmd,id)));
+ */
   acuCommand.etx = 0x3;
+
+  checksum = checkSum((char*)(&acuCommand), sizeof(acuCommand));
+
+   if(checksum > 0xffff) checksum=checksum & 0xffff;
+
+   acuCommand.checksum = htole16(checksum);
+
+
 
   memset(recvBuff, '0' ,sizeof(recvBuff));
   memset(sendBuff, '0' ,sizeof(sendBuff));
@@ -3942,7 +3993,7 @@ int ACUmode(int commandCode) {
 
   acuModeCommand.stx = 0x2;
   acuModeCommand.id = 0x4d; /* page 13 of ICD section 4.1.1.1  M cmd */
-  acuModeCommand.datalength = 0xc;
+  acuModeCommand.datalength = htole16(0xc);
   acuModeCommand.polMode = 0x0;
   acuModeCommand.controlWord = 0x0;
   acuModeCommand.etx = 0x3;
@@ -4000,11 +4051,17 @@ int ACUmode(int commandCode) {
   acuModeCommand.checksum = acuModeCommand.id + acuModeCommand.datalength+
                          acuModeCommand.azMode+acuModeCommand.elMode;
 */
+
    checksum = checkSum((char*)(&acuModeCommand), sizeof(acuModeCommand));
 
    if(checksum > 0xffff) checksum=checksum & 0xffff;
 
-   acuModeCommand.checksum = checksum;
+   acuModeCommand.checksum = htole16(checksum);
+
+   /*
+   acuModeCommand.checksum = htole16(calculate_checksum(
+                   (char *)&acuModeCommand.id, offsetof(acuCmd, checksum) - offsetof(acuCmd,id)));
+   */
 
 
   memset(recvBuff, '0' ,sizeof(recvBuff));
@@ -4076,7 +4133,7 @@ int ACUprogTrack(int numPos, int timeOfDay[], int azProgTrack[], int elProgTrack
  if (numPos==1) {
   acuAzElProgCommand.stx = 0x2;
   acuAzElProgCommand.id = 0x4F; /* page 16 of ICD section 4.1.1.4  O cmd */
-  acuAzElProgCommand.datalength = 0x17;
+  acuAzElProgCommand.datalength = htole16(0x17);
   acuAzElProgCommand.clearstack=0x1;
   acuAzElProgCommand.timeOfDay=timeOfDay[0];
   acuAzElProgCommand.dayOfYear=(short)acuDay;
@@ -4086,7 +4143,12 @@ int ACUprogTrack(int numPos, int timeOfDay[], int azProgTrack[], int elProgTrack
 
   checksum = checkSum((char*)(&acuAzElProgCommand), sizeof(acuAzElProgCommand));
   if(checksum > 0xffff) checksum=checksum & 0xffff;
-  acuAzElProgCommand.checksum = checksum;
+  acuAzElProgCommand.checksum = htole16(checksum);
+
+ /*
+  acuAzElProgCommand.checksum = htole16(calculate_checksum(
+                (char *)&acuAzElProgCommand.id, offsetof(acuCmd, checksum) - offsetof(acuCmd,id)));
+*/
 
    memcpy(sendBuff,(char*)&acuAzElProgCommand,sizeof(acuAzElProgCommand));
      n = send(sockfdControl,sendBuff,sizeof(acuAzElProgCommand),0);
@@ -4134,7 +4196,7 @@ int ACUprogTrack(int numPos, int timeOfDay[], int azProgTrack[], int elProgTrack
 
   checksum = checkSum((char*)(&acuAzElProgCommandTraj), sizeof(acuAzElProgCommandTraj));
   if(checksum > 0xffff) checksum=checksum & 0xffff;
-  acuAzElProgCommandTraj.checksum = checksum;
+  acuAzElProgCommandTraj.checksum = htole16(checksum);
 
    memcpy(sendBuff,(char*)&acuAzElProgCommandTraj,sizeof(acuAzElProgCommandTraj));
      n = send(sockfdControl,sendBuff,sizeof(acuAzElProgCommandTraj),0);
@@ -4204,7 +4266,7 @@ int ACUAzEl(double cmdAzdeg, double cmdEldeg) {
 
   acuAzElCommand.stx = 0x2;
   acuAzElCommand.id = 0x50; /* page 14 of ICD section 4.1.1.2  P cmd */
-  acuAzElCommand.datalength = 0x13;
+  acuAzElCommand.datalength = htole16(0x13);
   acuAzElCommand.cmdPol = 0x0;
   acuAzElCommand.etx = 0x3;
 
@@ -4212,7 +4274,12 @@ int ACUAzEl(double cmdAzdeg, double cmdEldeg) {
 
   if(checksum > 0xffff) checksum=checksum & 0xffff;
   
-  acuAzElCommand.checksum = checksum;
+  acuAzElCommand.checksum = htole16(checksum);
+
+ /*
+  acuAzElCommand.checksum = htole16(calculate_checksum(
+                   (char *)&acuAzElCommand.id, offsetof(acuCmd, checksum) - offsetof(acuCmd,id)));
+ */
 
   memset(recvBuff, '0' ,sizeof(recvBuff));
   memset(sendBuff, '0' ,sizeof(sendBuff));
@@ -4283,7 +4350,7 @@ int ACUAzElRate(double cmdAzRate, double cmdElRate) {
 
   acuAzElRateCommand.stx = 0x2;
   acuAzElRateCommand.id = 0x52; /* page 15 of ICD section 4.1.1.3  R cmd */
-  acuAzElRateCommand.datalength = 0x13;
+  acuAzElRateCommand.datalength = htole16(0x13);
   acuAzElRateCommand.cmdPol = 0x0;
   acuAzElRateCommand.etx = 0x3;
 
@@ -4291,7 +4358,11 @@ int ACUAzElRate(double cmdAzRate, double cmdElRate) {
 
   if(checksum > 0xffff) checksum=checksum & 0xffff;
   
-  acuAzElRateCommand.checksum = checksum;
+  acuAzElRateCommand.checksum = htole16(checksum);
+  /*
+  acuAzElRateCommand.checksum = htole16(calculate_checksum(
+              (char *)&acuAzElRateCommand.id, offsetof(acuCmd, checksum) - offsetof(acuCmd,id)));
+  */
 
   memset(recvBuff, '0' ,sizeof(recvBuff));
   memset(sendBuff, '0' ,sizeof(sendBuff));
@@ -4342,6 +4413,15 @@ short checkSum (char *buff,int size) {
   sum -= 5; /*subtract the sum of STX 0x2 and ETX 0x3, 
            first and last bytes */
   return sum;
+}
+
+/*The following checksum function is to replace the above one */
+short calculate_checksum(char *buff, int size) {
+    short sum = 0;
+    for (int i = 0; i < size; i++) {
+        sum += (signed char)buff[i]; // Treat as 8-bit signed integers
+    }
+    return (short)(sum & 0xFFFF); // Lower 16 bits only
 }
 
 void handlerForSIGINT(int signum)
