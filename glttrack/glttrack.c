@@ -23,10 +23,19 @@ version 3.0
 This is from github- 17 Mar 2023 version.
 A later version from November 2024 had Two Line mode- but that produced
 timing delays and many operations such as scans, pointing, did not work.
-In this present version, updates are made to all the ACU communications program
-to fix the error of byte order in checksum and data length variables. These errors were
-diagnosed on 26 November 2024, and all the low-level acuCommand C codes were updated.
-The same fixes are now applied here in this version of glttrack.c
+In this present version, updates are made to all the ACU communications
+program to fix the error of byte order in checksum and data length
+variables. These errors were diagnosed on 26 November 2024, and all
+the low-level acuCommand C codes were updated.  The same fixes are now
+applied here in this version of glttrack.c
+
+
+version 3.1
+16 May 2025 NAP
+Implement a Watchdog timer for ACU communications via a new thread,
+instead of just opening the connection at the beginning, before entering
+the main loop.
+
 
 *****************************************************************/
 
@@ -67,6 +76,7 @@ The same fixes are now applied here in this version of glttrack.c
 #include "acuCommands.h"
 #include "dsm.h"
 
+#include <poll.h>
 
 #define ACC "gltobscon"
 
@@ -124,6 +134,7 @@ void *CommandHandler();
 void *ACUstatus();
 void *ACUiostatus();
 void *ACUmetrology();
+void *ACUConnectionWatchdog(void *arg);
 int ACUmode(int acuModeCmd);
 int ACUAzEl(double cmdAzdeg, double cmdEldeg);
 int ACUAzElRate(double cmdAzRate, double cmdElRate);
@@ -156,10 +167,10 @@ void redisWriteString(char *hashName, char *fieldName, char *variable);
 struct sigaction action, old_action;
 int sigactionInt;
 
-pthread_t	CommandHandlerTID, ACUstatusTID,ACUiostatusTID,ACUmetrologyTID ;
+pthread_t	CommandHandlerTID, ACUstatusTID,ACUiostatusTID,ACUmetrologyTID,                 watchdogTID;
 
-	struct sched_param param,param2,param3,param4;
-	pthread_attr_t attr,attr2,attr3,attr4;
+	struct sched_param param,param2,param3,param4,watchdogParam;
+	pthread_attr_t attr,attr2,attr3,attr4,watchdogAttr;
 	int policy = SCHED_FIFO;
 
 unsigned long   window;
@@ -644,6 +655,7 @@ DAEMONSET
                 exit(1);
                 }
 #endif 
+
         /* initializing ACU ethernet communications */
         if((sockfdControl = socket(AF_INET, SOCK_STREAM, 0))< 0) {
             printf("\n Error : Could not create socket \n");
@@ -714,6 +726,15 @@ DAEMONSET
 	param4.sched_priority=15;
 	pthread_attr_setschedparam(&attr4,&param4);
 	pthread_setschedparam(ACUiostatusTID,policy,&param4);
+   
+        pthread_attr_init(&watchdogAttr);
+        if (pthread_create(&watchdogTID, &watchdogAttr, ACUConnectionWatchdog, 
+            NULL) != 0) {
+            fprintf(stderr, "Failed to start ACUConnectionWatchdog thread.\n");
+        }
+        watchdogParam.sched_priority = 10;
+        pthread_attr_setschedparam(&watchdogAttr, &watchdogParam);
+        pthread_setschedparam(watchdogTID, SCHED_FIFO, &watchdogParam);
 
 
     /* tracking smoothing error */
@@ -3962,6 +3983,61 @@ printf("tempSensor1=%d,tempSensor2=%d,tempSensor3=%d\n",tempSensor[0],tempSensor
 	pthread_detach(ACUmetrologyTID);
 	pthread_exit((void *) 0);
 }
+
+void *ACUConnectionWatchdog(void *arg) {
+    struct sockaddr_in serv_addr_control, serv_addr_monitor;
+    int retry_interval_sec = 5;
+
+    serv_addr_control.sin_family = AF_INET;
+    serv_addr_control.sin_port = htons(ACU_CONTROL_PORT);
+    serv_addr_control.sin_addr.s_addr = inet_addr(ACU_IP_ADDRESS);
+
+    serv_addr_monitor.sin_family = AF_INET;
+    serv_addr_monitor.sin_port = htons(ACU_MONITOR_PORT);
+    serv_addr_monitor.sin_addr.s_addr = inet_addr(ACU_IP_ADDRESS);
+
+    while (1) {
+        struct pollfd pfd;
+        pfd.fd = sockfdControl;
+        pfd.events = POLLOUT;
+
+        int poll_status = poll(&pfd, 1, 1000);  // 1s timeout
+        if (poll_status <= 0 || (pfd.revents & (POLLERR | POLLHUP))) {
+            fprintf(stderr, "[ACU Watchdog] Connection lost. Attempting reconnection...\n");
+            close(sockfdControl);
+            close(sockfdMonitor);
+
+            // Retry connecting to CONTROL port
+            while (1) {
+                sockfdControl = socket(AF_INET, SOCK_STREAM, 0);
+                if (sockfdControl >= 0 &&
+                    connect(sockfdControl, (struct sockaddr *)&serv_addr_control, sizeof(serv_addr_control)) == 0) {
+                    fprintf(stderr, "[ACU Watchdog] Reconnected to ACU CONTROL port.\n");
+                    break;
+                }
+                close(sockfdControl);
+                sleep(retry_interval_sec);
+            }
+
+            // Retry connecting to MONITOR port
+            while (1) {
+                sockfdMonitor = socket(AF_INET, SOCK_STREAM, 0);
+                if (sockfdMonitor >= 0 &&
+                    connect(sockfdMonitor, (struct sockaddr *)&serv_addr_monitor, sizeof(serv_addr_monitor)) == 0) {
+                    fprintf(stderr, "[ACU Watchdog] Reconnected to ACU MONITOR port.\n");
+                    break;
+                }
+                close(sockfdMonitor);
+                sleep(retry_interval_sec);
+            }
+        }
+
+        sleep(2);  // Polling interval
+    }
+
+    return NULL;
+}
+
 
 int ACUmode(int commandCode) {
 
