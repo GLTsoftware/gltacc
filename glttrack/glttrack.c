@@ -764,6 +764,7 @@ DAEMONSET
 	pthread_attr_setschedparam(&attr,&param);
 	pthread_setschedparam(CommandHandlerTID,policy,&param);
 
+        sleep(2);
 	pthread_attr_init(&attr4);
 	if (pthread_create(&ACUiostatusTID, &attr4, ACUiostatus,
 			 (void *) 0) == -1) { 
@@ -774,8 +775,8 @@ DAEMONSET
 	pthread_attr_setschedparam(&attr4,&param4);
 	pthread_setschedparam(ACUiostatusTID,policy,&param4);
         fprintf(stderr,"[glttrack] Starting ACUiostatus thread.\n");
-        sleep(2);
 
+        sleep(2);
 	pthread_attr_init(&attr2);
 	if (pthread_create(&ACUstatusTID, &attr2, ACUstatus,
 			 (void *) 0) == -1) { 
@@ -786,9 +787,8 @@ DAEMONSET
 	pthread_attr_setschedparam(&attr2,&param2);
 	pthread_setschedparam(ACUstatusTID,policy,&param2);
         fprintf(stderr,"[glttrack] Starting ACUstatus thread.\n");
+
         sleep(2);
-
-
 	pthread_attr_init(&attr3);
 	if (pthread_create(&ACUmetrologyTID, &attr3, ACUmetrology,
 			 (void *) 0) == -1) { 
@@ -799,9 +799,8 @@ DAEMONSET
 	pthread_attr_setschedparam(&attr3,&param3);
 	pthread_setschedparam(ACUmetrologyTID,policy,&param3);
         fprintf(stderr,"[glttrack] Starting ACUmetrology thread.\n");
-        sleep(2);
 
-   
+        sleep(2);
         pthread_attr_init(&watchdogAttr);
         if (pthread_create(&watchdogTID, &watchdogAttr, ACUConnectionWatchdog, 
             NULL) != 0) {
