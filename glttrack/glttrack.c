@@ -120,6 +120,10 @@ the main loop.
 
 #define NUMPOS 6 /* number of trajectory points for ACU program track mode */
 
+// ACU connection retry logic
+#define MAX_CONNECT_RETRIES 10
+#define CONNECT_WAIT_SEC 2
+
 /************************************************************************/
 struct source
 {
@@ -656,6 +660,7 @@ DAEMONSET
                 }
 #endif 
 
+#if 0
         /* initializing ACU ethernet communications */
         if((sockfdControl = socket(AF_INET, SOCK_STREAM, 0))< 0) {
             printf("\n Error : Could not create socket \n");
@@ -685,6 +690,69 @@ DAEMONSET
             return 1;
           }
 
+#endif 
+
+         // ACU connection retry logic
+
+
+        // --- Connect to CONTROL port ---
+        int attempt = 0;
+        while ((sockfdControl = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+            fprintf(stderr, "[glttrack] Failed to create control socket. Retrying...\n");
+            sleep(CONNECT_WAIT_SEC);
+            if (++attempt == MAX_CONNECT_RETRIES) {
+                fprintf(stderr, "[glttrack] Too many control socket failures. Exiting.\n");
+                exit(1);
+            }
+        }
+
+        memset(&serv_addr, 0, sizeof(serv_addr));
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_port = htons(ACU_CONTROL_PORT);
+        serv_addr.sin_addr.s_addr = inet_addr(ACU_IP_ADDRESS);
+
+        attempt = 0;
+        while (connect(sockfdControl, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+            fprintf(stderr, "[glttrack] Control port connect failed. Retrying...\n");
+            close(sockfdControl);
+            sockfdControl = socket(AF_INET, SOCK_STREAM, 0);
+            sleep(CONNECT_WAIT_SEC);
+            if (++attempt == MAX_CONNECT_RETRIES) {
+                fprintf(stderr, "[glttrack] Failed to connect to ACU control after %d attempts. Exiting.\n", MAX_CONNECT_RETRIES);
+                exit(1);
+            }
+        }
+        fprintf(stderr, "[glttrack] Connected to ACU CONTROL port.\n");
+
+        // --- Connect to MONITOR port ---
+        attempt = 0;
+        while ((sockfdMonitor = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+            fprintf(stderr, "[glttrack] Failed to create monitor socket. Retrying...\n");
+            sleep(CONNECT_WAIT_SEC);
+            if (++attempt == MAX_CONNECT_RETRIES) {
+                fprintf(stderr, "[glttrack] Too many monitor socket failures. Exiting.\n");
+                exit(1);
+            }
+        }
+        
+        memset(&serv_addr, 0, sizeof(serv_addr));
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_port = htons(ACU_MONITOR_PORT);
+        serv_addr.sin_addr.s_addr = inet_addr(ACU_IP_ADDRESS);
+        
+        attempt = 0;
+        while (connect(sockfdMonitor, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+            fprintf(stderr, "[glttrack] Monitor port connect failed. Retrying...\n");
+            close(sockfdMonitor);
+            sockfdMonitor = socket(AF_INET, SOCK_STREAM, 0);
+            sleep(CONNECT_WAIT_SEC);
+            if (++attempt == MAX_CONNECT_RETRIES) {
+                fprintf(stderr, "[glttrack] Failed to connect to ACU monitor after %d attempts. Exiting.\n", MAX_CONNECT_RETRIES);
+                exit(1);
+            }
+        }
+        fprintf(stderr, "[glttrack] Connected to ACU MONITOR port.\n");
+        
  
 	pthread_attr_init(&attr);
 	if (pthread_create(&CommandHandlerTID, &attr, CommandHandler,
@@ -696,6 +764,18 @@ DAEMONSET
 	pthread_attr_setschedparam(&attr,&param);
 	pthread_setschedparam(CommandHandlerTID,policy,&param);
 
+	pthread_attr_init(&attr4);
+	if (pthread_create(&ACUiostatusTID, &attr4, ACUiostatus,
+			 (void *) 0) == -1) { 
+	perror("main: pthread_create ACUiostatus");
+	exit(-1);
+	}
+	param4.sched_priority=15;
+	pthread_attr_setschedparam(&attr4,&param4);
+	pthread_setschedparam(ACUiostatusTID,policy,&param4);
+        fprintf(stderr,"[glttrack] Starting ACUiostatus thread.\n");
+        sleep(2);
+
 	pthread_attr_init(&attr2);
 	if (pthread_create(&ACUstatusTID, &attr2, ACUstatus,
 			 (void *) 0) == -1) { 
@@ -705,6 +785,8 @@ DAEMONSET
 	param2.sched_priority=20;
 	pthread_attr_setschedparam(&attr2,&param2);
 	pthread_setschedparam(ACUstatusTID,policy,&param2);
+        fprintf(stderr,"[glttrack] Starting ACUstatus thread.\n");
+        sleep(2);
 
 
 	pthread_attr_init(&attr3);
@@ -716,16 +798,9 @@ DAEMONSET
 	param3.sched_priority=15;
 	pthread_attr_setschedparam(&attr3,&param3);
 	pthread_setschedparam(ACUmetrologyTID,policy,&param3);
+        fprintf(stderr,"[glttrack] Starting ACUmetrology thread.\n");
+        sleep(2);
 
-	pthread_attr_init(&attr4);
-	if (pthread_create(&ACUiostatusTID, &attr4, ACUiostatus,
-			 (void *) 0) == -1) { 
-	perror("main: pthread_create ACUiostatus");
-	exit(-1);
-	}
-	param4.sched_priority=15;
-	pthread_attr_setschedparam(&attr4,&param4);
-	pthread_setschedparam(ACUiostatusTID,policy,&param4);
    
         pthread_attr_init(&watchdogAttr);
         if (pthread_create(&watchdogTID, &watchdogAttr, ACUConnectionWatchdog, 
@@ -735,6 +810,8 @@ DAEMONSET
         watchdogParam.sched_priority = 10;
         pthread_attr_setschedparam(&watchdogAttr, &watchdogParam);
         pthread_setschedparam(watchdogTID, SCHED_FIFO, &watchdogParam);
+        fprintf(stderr,"[glttrack] Starting ACU connection watchdog thread.\n");
+        sleep(2);
 
 
     /* tracking smoothing error */
