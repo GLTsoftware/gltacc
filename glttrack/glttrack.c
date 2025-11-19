@@ -243,7 +243,8 @@ int	cal_flag=0;
 
 	char operatorErrorMessage[500];
        int sockfdControl=0,sockfdMonitor=0;
-     
+       pthread_mutex_t socket_mutex = PTHREAD_MUTEX_INITIALIZER;
+
         double az_enc_from_acu,el_enc_from_acu;
 
 char redisData[1024];
@@ -752,8 +753,26 @@ DAEMONSET
             }
         }
         fprintf(stderr, "[glttrack] Connected to ACU MONITOR port.\n");
-        
- 
+
+        // Set socket timeouts to prevent indefinite blocking
+        struct timeval socket_timeout;
+        socket_timeout.tv_sec = 1;  // 1 second timeout
+        socket_timeout.tv_usec = 0;
+
+        if (setsockopt(sockfdControl, SOL_SOCKET, SO_RCVTIMEO, &socket_timeout, sizeof(socket_timeout)) < 0) {
+            fprintf(stderr, "[glttrack] Warning: Failed to set receive timeout on control socket\n");
+        }
+        if (setsockopt(sockfdControl, SOL_SOCKET, SO_SNDTIMEO, &socket_timeout, sizeof(socket_timeout)) < 0) {
+            fprintf(stderr, "[glttrack] Warning: Failed to set send timeout on control socket\n");
+        }
+        if (setsockopt(sockfdMonitor, SOL_SOCKET, SO_RCVTIMEO, &socket_timeout, sizeof(socket_timeout)) < 0) {
+            fprintf(stderr, "[glttrack] Warning: Failed to set receive timeout on monitor socket\n");
+        }
+        if (setsockopt(sockfdMonitor, SOL_SOCKET, SO_SNDTIMEO, &socket_timeout, sizeof(socket_timeout)) < 0) {
+            fprintf(stderr, "[glttrack] Warning: Failed to set send timeout on monitor socket\n");
+        }
+        fprintf(stderr, "[glttrack] Socket timeouts configured (1 second).\n");
+
 	pthread_attr_init(&attr);
 	if (pthread_create(&CommandHandlerTID, &attr, CommandHandler,
 			 (void *) 0) == -1) { 
@@ -1875,12 +1894,16 @@ for the actual positions*/
         if(az_offset_flag==1) {
         azrate = prev_azrate;
         az_offset_flag=0;
+        /* Write acknowledgment that azoff has been applied */
+        redisWriteDouble("gltTrackUser","azoff_ack",1.0);
         }
 
         if(el_offset_flag==0) elrate = el - el1;
         if(el_offset_flag==1) {
         elrate = prev_elrate;
         el_offset_flag=0;
+        /* Write acknowledgment that eloff has been applied */
+        redisWriteDouble("gltTrackUser","eloff_ack",1.0);
         }                                         
 
 	prev_azrate = azrate;
@@ -2285,9 +2308,9 @@ if(sun_avoid_flag==1) {
           if (dsm_status != DSM_SUCCESS) {
           dsm_error_message(dsm_status,"dsm_read(DSM_AZOFF_ARCSEC_D)");
           }
-/*
-        redisWriteDouble("gltTrackuser","azoff",azoff);
-*/
+        redisWriteDouble("gltTrackUser","azoff",azoff);
+        /* Write pending status - will be updated to 1 after ACU acknowledges */
+        redisWriteDouble("gltTrackUser","azoff_ack",0.0);
 	az_offset_flag=1;
 		user = -1;
 	break;
@@ -2310,9 +2333,9 @@ for holography mapping */
 	SendLastCommandToDSM(lastCommand);
         dsm_status=dsm_read(DSM_HOST,"DSM_COMMANDED_ELOFF_ARCSEC_D",&eloff,&timeStamp);
 	dsm_status=dsm_write(DSM_HOST,"DSM_ELOFF_ARCSEC_D",&eloff);
-/*
-        redisWriteDouble("gltTrackuser","eloff",eloff);
-*/
+        redisWriteDouble("gltTrackUser","eloff",eloff);
+        /* Write pending status - will be updated to 1 after ACU acknowledges */
+        redisWriteDouble("gltTrackUser","eloff_ack",0.0);
         el_offset_flag=1;
 		user = -1;
 	break;
@@ -4080,6 +4103,10 @@ void *ACUConnectionWatchdog(void *arg) {
         int poll_status = poll(&pfd, 1, 1000);  // 1s timeout
         if (poll_status <= 0 || (pfd.revents & (POLLERR | POLLHUP))) {
             fprintf(stderr, "[ACU Watchdog] Connection lost. Attempting reconnection...\n");
+
+            /* Lock mutex before closing and reconnecting sockets */
+            pthread_mutex_lock(&socket_mutex);
+
             close(sockfdControl);
             close(sockfdMonitor);
 
@@ -4106,6 +4133,19 @@ void *ACUConnectionWatchdog(void *arg) {
                 close(sockfdMonitor);
                 sleep(retry_interval_sec);
             }
+
+            // Set socket timeouts after reconnection
+            struct timeval socket_timeout;
+            socket_timeout.tv_sec = 1;
+            socket_timeout.tv_usec = 0;
+
+            setsockopt(sockfdControl, SOL_SOCKET, SO_RCVTIMEO, &socket_timeout, sizeof(socket_timeout));
+            setsockopt(sockfdControl, SOL_SOCKET, SO_SNDTIMEO, &socket_timeout, sizeof(socket_timeout));
+            setsockopt(sockfdMonitor, SOL_SOCKET, SO_RCVTIMEO, &socket_timeout, sizeof(socket_timeout));
+            setsockopt(sockfdMonitor, SOL_SOCKET, SO_SNDTIMEO, &socket_timeout, sizeof(socket_timeout));
+            fprintf(stderr, "[ACU Watchdog] Socket timeouts reconfigured after reconnection.\n");
+
+            pthread_mutex_unlock(&socket_mutex);
         }
 
         sleep(2);  // Polling interval
@@ -4220,11 +4260,21 @@ int ACUmode(int commandCode) {
   memset(sendBuff, '0' ,sizeof(sendBuff));
 
   memcpy(sendBuff,(char*)&acuModeCommand,sizeof(acuModeCommand));
+
+  /* Lock mutex for socket operations */
+  pthread_mutex_lock(&socket_mutex);
+
   n = send(sockfdControl,sendBuff,sizeof(acuModeCommand),0);
-  if (n<0) printf("ERROR writing to ACU.");
- 
+  if (n<0) {
+      printf("ERROR writing to ACU.");
+      pthread_mutex_unlock(&socket_mutex);
+      return -1;
+  }
+
   /* receive the ACK response from ACU */
-  n = recv(sockfdControl, recvBuff, sizeof(acuStatusResp),0); 
+  n = recv(sockfdControl, recvBuff, sizeof(acuStatusResp),0);
+
+  pthread_mutex_unlock(&socket_mutex);
 /*
   printf("Received:  0x%x from ACU\n",recvBuff[0]);
 */
@@ -4303,8 +4353,16 @@ int ACUprogTrack(int numPos, int timeOfDay[], int azProgTrack[], int elProgTrack
 */
 
    memcpy(sendBuff,(char*)&acuAzElProgCommand,sizeof(acuAzElProgCommand));
+
+     /* Lock mutex for socket operations */
+     pthread_mutex_lock(&socket_mutex);
+
      n = send(sockfdControl,sendBuff,sizeof(acuAzElProgCommand),0);
-     if (n<0) printf("ERROR writing to ACU. For acuAzElProgCommand....");
+     if (n<0) {
+         printf("ERROR writing to ACU. For acuAzElProgCommand....");
+         pthread_mutex_unlock(&socket_mutex);
+         return -1;
+     }
 /*
      printf("Wrote %d bytes to ACU - acuAzElProgCommand....\n",n);
 */
@@ -4351,8 +4409,16 @@ int ACUprogTrack(int numPos, int timeOfDay[], int azProgTrack[], int elProgTrack
   acuAzElProgCommandTraj.checksum = htole16(checksum);
 
    memcpy(sendBuff,(char*)&acuAzElProgCommandTraj,sizeof(acuAzElProgCommandTraj));
+
+     /* Lock mutex for socket operations */
+     pthread_mutex_lock(&socket_mutex);
+
      n = send(sockfdControl,sendBuff,sizeof(acuAzElProgCommandTraj),0);
-     if (n<0) printf("ERROR writing to ACU. acuAzElprogCommandTraj.......");
+     if (n<0) {
+         printf("ERROR writing to ACU. acuAzElprogCommandTraj.......");
+         pthread_mutex_unlock(&socket_mutex);
+         return -1;
+     }
 /*
      printf("Wrote %d bytes to ACU acuAzElprogCommandTraj.......\n",n);
 */
@@ -4361,6 +4427,8 @@ int ACUprogTrack(int numPos, int timeOfDay[], int azProgTrack[], int elProgTrack
 
      /* receive the ACK response from ACU */
      n = recv(sockfdControl, recvBuff, sizeof(acuStatusResp),0);
+
+     pthread_mutex_unlock(&socket_mutex);
 
      if( n < 0)  printf("\n Read Error \n");
 
@@ -4437,11 +4505,21 @@ int ACUAzEl(double cmdAzdeg, double cmdEldeg) {
   memset(sendBuff, '0' ,sizeof(sendBuff));
 
   memcpy(sendBuff,(char*)&acuAzElCommand,sizeof(acuAzElCommand));
+
+  /* Lock mutex for socket operations */
+  pthread_mutex_lock(&socket_mutex);
+
   n = send(sockfdControl,sendBuff,sizeof(acuAzElCommand),0);
-  if (n<0) printf("ERROR writing to ACU.");
- 
+  if (n<0) {
+      printf("ERROR writing to ACU.");
+      pthread_mutex_unlock(&socket_mutex);
+      return -1;
+  }
+
   /* receive the ACK response from ACU */
-  n = recv(sockfdControl, recvBuff, sizeof(acuStatusResp),0); 
+  n = recv(sockfdControl, recvBuff, sizeof(acuStatusResp),0);
+
+  pthread_mutex_unlock(&socket_mutex);
 
   if( n < 0)  printf("\n Read Error \n"); 
 
