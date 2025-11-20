@@ -1894,16 +1894,12 @@ for the actual positions*/
         if(az_offset_flag==1) {
         azrate = prev_azrate;
         az_offset_flag=0;
-        /* Write acknowledgment that azoff has been applied */
-        redisWriteDouble("gltTrackUser","azoff_ack",1.0);
         }
 
         if(el_offset_flag==0) elrate = el - el1;
         if(el_offset_flag==1) {
         elrate = prev_elrate;
         el_offset_flag=0;
-        /* Write acknowledgment that eloff has been applied */
-        redisWriteDouble("gltTrackUser","eloff_ack",1.0);
         }                                         
 
 	prev_azrate = azrate;
@@ -2308,9 +2304,10 @@ if(sun_avoid_flag==1) {
           if (dsm_status != DSM_SUCCESS) {
           dsm_error_message(dsm_status,"dsm_read(DSM_AZOFF_ARCSEC_D)");
           }
+/*
         redisWriteDouble("gltTrackUser","azoff",azoff);
-        /* Write pending status - will be updated to 1 after ACU acknowledges */
         redisWriteDouble("gltTrackUser","azoff_ack",0.0);
+*/
 	az_offset_flag=1;
 		user = -1;
 	break;
@@ -2333,9 +2330,10 @@ for holography mapping */
 	SendLastCommandToDSM(lastCommand);
         dsm_status=dsm_read(DSM_HOST,"DSM_COMMANDED_ELOFF_ARCSEC_D",&eloff,&timeStamp);
 	dsm_status=dsm_write(DSM_HOST,"DSM_ELOFF_ARCSEC_D",&eloff);
+/*
         redisWriteDouble("gltTrackUser","eloff",eloff);
-        /* Write pending status - will be updated to 1 after ACU acknowledges */
         redisWriteDouble("gltTrackUser","eloff_ack",0.0);
+*/
         el_offset_flag=1;
 		user = -1;
 	break;
