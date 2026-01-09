@@ -648,8 +648,10 @@ DAEMONSET
         if (redisC) {
             printf("Connection error: %s\n", redisC->errstr);
             redisFree(redisC);
+            redisC = NULL;
           } else {
             printf("Connection error: can't allocate redis context\n");
+            redisC = NULL;
         }
        }
 
@@ -3196,29 +3198,39 @@ dsm_status=dsm_write(DSM_HOST,"DSM_TRACK_LAST_COMMAND_C100",lastCommand);
 
 void redisWriteShort(char *hashName, char *fieldName, short variable)
 {
-        sprintf(redisData,"HSET %s %s %h",hashName,fieldName,variable);
-        redisResp = redisCommand(redisC,redisData);
+        if (redisC != NULL) {
+                sprintf(redisData,"HSET %s %s %h",hashName,fieldName,variable);
+                redisResp = redisCommand(redisC,redisData);
+        }
 }
 
 void redisWriteInt(char *hashName, char *fieldName, int variable)
 {
-        sprintf(redisData,"HSET %s %s %d",hashName,fieldName,variable);
-        redisResp = redisCommand(redisC,redisData);
+        if (redisC != NULL) {
+                sprintf(redisData,"HSET %s %s %d",hashName,fieldName,variable);
+                redisResp = redisCommand(redisC,redisData);
+        }
 }
 void redisWriteFloat(char *hashName, char *fieldName,float variable)
 {
-        sprintf(redisData,"HSET %s %s %f",hashName,fieldName,variable);
-        redisResp = redisCommand(redisC,redisData);
+        if (redisC != NULL) {
+                sprintf(redisData,"HSET %s %s %f",hashName,fieldName,variable);
+                redisResp = redisCommand(redisC,redisData);
+        }
 }
 void redisWriteDouble(char *hashName, char *fieldName, double variable)
 {
-        sprintf(redisData,"HSET %s %s %lf",hashName,fieldName,variable);
-        redisResp = redisCommand(redisC,redisData);
+        if (redisC != NULL) {
+                sprintf(redisData,"HSET %s %s %lf",hashName,fieldName,variable);
+                redisResp = redisCommand(redisC,redisData);
+        }
 }
 void redisWriteString(char *hashName, char *fieldName, char *variable)
 {
-        sprintf(redisData,"HSET %s %s %s",hashName,fieldName,variable);
-        redisResp = redisCommand(redisC,redisData);
+        if (redisC != NULL) {
+                sprintf(redisData,"HSET %s %s %s",hashName,fieldName,variable);
+                redisResp = redisCommand(redisC,redisData);
+        }
 }
 
 double sunDistance(double az1,double el1,double az2,double el2)
@@ -3426,30 +3438,38 @@ printf("Time: %d\n",acuStatusResp.timeOfDay);
   if (dsm_status != DSM_SUCCESS) {
   printf("Warning: DSM write failed! DSM_AZ_POSN_DEG dsm_status=%d\n",dsm_status);
   }
+  if (redisC != NULL) {
         sprintf(redisData,"HSET acu azPosn %lf",az);
         redisResp = redisCommand(redisC,redisData);
+  }
 
   dsm_status = dsm_write(ACC,"DSM_EL_POSN_DEG_D",&el);
 
   if (dsm_status != DSM_SUCCESS) {
   printf("Warning: DSM write failed! DSM_EL_POSN_DEG dsm_status=%d\n",dsm_status);
   }
+  if (redisC != NULL) {
         sprintf(redisData,"HSET acu elPosn %lf",el);
         redisResp = redisCommand(redisC,redisData);
+  }
 
   dsm_status = dsm_write(ACC,"DSM_AZ_ACU_CMD_POSN_DEG_D",&acuCmdAz);
   if (dsm_status != DSM_SUCCESS) {
   printf("Warning: DSM write failed! DSM_AZ_ACU_CMD_POSN_DEG dsm_status=%d\n",dsm_status);
   }
+  if (redisC != NULL) {
         sprintf(redisData,"HSET acu azCmdPosn %lf",acuCmdAz);
         redisResp = redisCommand(redisC,redisData);
+  }
 
   dsm_status = dsm_write(ACC,"DSM_EL_ACU_CMD_POSN_DEG_D",&acuCmdEl);
   if (dsm_status != DSM_SUCCESS) {
   printf("Warning: DSM write failed! DSM_EL_ACU_CMD_POSN_DEG dsm_status=%d\n",dsm_status);
   }
+  if (redisC != NULL) {
         sprintf(redisData,"HSET acu elCmdPosn %lf",acuCmdEl);
         redisResp = redisCommand(redisC,redisData);
+  }
 
   az_tracking_error = (float)(acuCmdAz-az)*3600.;
   el_tracking_error = (float)(acuCmdEl-el)*3600.;
@@ -3461,16 +3481,20 @@ printf("Time: %d\n",acuStatusResp.timeOfDay);
   if (dsm_status != DSM_SUCCESS) {
   printf("Warning: DSM write failed! dsm_status=%d\n",dsm_status);
   }
+  if (redisC != NULL) {
         sprintf(redisData,"HSET gltTrackComp azTrackingError %f",az_tracking_error);
         redisResp = redisCommand(redisC,redisData);
+  }
 
   dsm_status = dsm_write(ACC,"DSM_EL_TRACKING_ERROR_F",&el_tracking_error);
 
   if (dsm_status != DSM_SUCCESS) {
   printf("Warning: DSM write failed! dsm_status=%d\n",dsm_status);
   }
+  if (redisC != NULL) {
         sprintf(redisData,"HSET gltTrackComp elTrackingError %f",el_tracking_error);
         redisResp = redisCommand(redisC,redisData);
+  }
 
   acuModeAz=acuStatusResp.azStatusMode;
   acuModeEl=acuStatusResp.elStatusMode;
@@ -3507,14 +3531,18 @@ printf("Time: %d\n",acuStatusResp.timeOfDay);
   if (dsm_status != DSM_SUCCESS) {
   printf("DSM write failed! DSM_ACU_DAYOFYEAR_L dsm_status=%d\n",dsm_status);
   }
+  if (redisC != NULL) {
         sprintf(redisData,"HSET acu dayOfYear %d",acuDay);
         redisResp = redisCommand(redisC,redisData);
+  }
   dsm_status = dsm_write(ACC,"DSM_ACU_HOUR_L",&acuHour);
   if (dsm_status != DSM_SUCCESS) {
   printf("DSM write failed! DSM_ACU_HOUR_L dsm_status=%d\n",dsm_status);
   }
+  if (redisC != NULL) {
         sprintf(redisData,"HSET acu hour %d",acuHour);
         redisResp = redisCommand(redisC,redisData);
+  }
 
 
 /*
@@ -3852,6 +3880,7 @@ printf("Time: %d\n",ioStatusResp.timeOfDay);
   dsm_status = dsm_write(ACC,"DSM_EL_MOTOR2_TEMP_S",&elmotor2temp);
   dsm_status = dsm_write(ACC,"DSM_EL_MOTOR3_TEMP_S",&elmotor3temp);
   dsm_status = dsm_write(ACC,"DSM_EL_MOTOR4_TEMP_S",&elmotor4temp);
+  if (redisC != NULL) {
         sprintf(redisData,"HSET acu azMotor1Temp %h",azmotor1temp);
         redisResp = redisCommand(redisC,redisData);
         sprintf(redisData,"HSET acu azMotor2Temp %h",azmotor2temp);
@@ -3864,6 +3893,7 @@ printf("Time: %d\n",ioStatusResp.timeOfDay);
         redisResp = redisCommand(redisC,redisData);
         sprintf(redisData,"HSET acu elMotor4Temp %h",elmotor4temp);
         redisResp = redisCommand(redisC,redisData);
+  }
 
   dsm_status = dsm_write(ACC,"DSM_AZ_MOTOR1_CURRENT_F",&az1motorcurrentF);
   dsm_status = dsm_write(ACC,"DSM_AZ_MOTOR2_CURRENT_F",&az2motorcurrentF);
@@ -3871,6 +3901,7 @@ printf("Time: %d\n",ioStatusResp.timeOfDay);
   dsm_status = dsm_write(ACC,"DSM_EL_MOTOR2_CURRENT_F",&el2motorcurrentF);
   dsm_status = dsm_write(ACC,"DSM_EL_MOTOR3_CURRENT_F",&el3motorcurrentF);
   dsm_status = dsm_write(ACC,"DSM_EL_MOTOR4_CURRENT_F",&el4motorcurrentF);
+  if (redisC != NULL) {
         sprintf(redisData,"HSET acu azMotor1Current %f",az1motorcurrentF);
         redisResp = redisCommand(redisC,redisData);
         sprintf(redisData,"HSET acu azMotor2Current %f",az2motorcurrentF);
@@ -3883,6 +3914,7 @@ printf("Time: %d\n",ioStatusResp.timeOfDay);
         redisResp = redisCommand(redisC,redisData);
         sprintf(redisData,"HSET acu elMotor4Current %f",el4motorcurrentF);
         redisResp = redisCommand(redisC,redisData);
+  }
 
   if (dsm_status != DSM_SUCCESS) {
   printf("Warning: DSM write failed! dsm_status=%d\n",dsm_status);
@@ -4100,8 +4132,10 @@ printf("tempSensor1=%d,tempSensor2=%d,tempSensor3=%d\n",tempSensor[0],tempSensor
   if (recvBuff[0]==0x2) {
   sprintf(acuErrorMessage,"ACU refuses the command...reason:");
   dsm_status = dsm_write(ACC,"DSM_ACU_ERROR_MESSAGE_C256",acuErrorMessage);
+  if (redisC != NULL) {
         sprintf(redisData,"HSET acu errorMessage %s",acuErrorMessage);
         redisResp = redisCommand(redisC,redisData);
+  }
   if (dsm_status != DSM_SUCCESS) {
   printf("DSM write failed! DSM_ACU_ERROR_MESSAGE_C256 dsm_status=%d\n",dsm_status);
   }
@@ -4118,8 +4152,10 @@ printf("tempSensor1=%d,tempSensor2=%d,tempSensor3=%d\n",tempSensor[0],tempSensor
   } else {sprintf(acuErrorMessage,"");}
 
   dsm_status = dsm_write(ACC,"DSM_ACU_ERROR_MESSAGE_C256",acuErrorMessage);
+  if (redisC != NULL) {
         sprintf(redisData,"HSET acu errorMessage %s",acuErrorMessage);
         redisResp = redisCommand(redisC,redisData);
+  }
   if (dsm_status != DSM_SUCCESS) {
   printf("DSM write failed! DSM_ACU_ERROR_MESSAGE_C256 dsm_status=%d\n",dsm_status);
   }
