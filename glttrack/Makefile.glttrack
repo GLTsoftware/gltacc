@@ -5,7 +5,7 @@ BIN = gltTrack
 #LFLAGS = -L$(COMMONLIB)
 #-lrpc
 LIB = -ldsm -lrt -lm -lcurses  -lpthread -lhiredis
-INC = -I$(GLOBALINC) -I$(COMMONINC) -I/usr/local/include 
+INC = -I$(GLOBALINC) -I$(COMMONINC) -I/usr/local/include -I/usr/local/include/hiredis 
 OBJ = glttrack.o local.o mount.o Refract.o solsys2.o readeph0.o \
 	novas.o novascon.o pleph2.o cspice.a 
 
