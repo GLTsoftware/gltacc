@@ -243,7 +243,8 @@ int	cal_flag=0;
 
 	char operatorErrorMessage[500];
        int sockfdControl=0,sockfdMonitor=0;
-       pthread_mutex_t socket_mutex = PTHREAD_MUTEX_INITIALIZER;
+       pthread_mutex_t control_socket_mutex = PTHREAD_MUTEX_INITIALIZER;
+       pthread_mutex_t monitor_socket_mutex = PTHREAD_MUTEX_INITIALIZER;
 
         double az_enc_from_acu,el_enc_from_acu;
 
@@ -3350,19 +3351,34 @@ void *ACUstatus() {
 
 
 	while(1) {
-	
+
+  /* Lock mutex for socket operations */
+  pthread_mutex_lock(&monitor_socket_mutex);
+
   n = send(sockfdMonitor,sendBuff,sizeof(acuCommand),0);
-  if (n<0) printf("ERROR writing to ACU.");
+  if (n<0) {
+      printf("ERROR writing to ACU.");
+      pthread_mutex_unlock(&monitor_socket_mutex);
+      usleep(100000);
+      continue;
+  }
 
   /* receive the ACK response from ACU */
   n = recv(sockfdMonitor, recvBuff, sizeof(acuStatusResp),0);
 
-  if( n < 0)  printf("\n Read Error \n");
+  if( n < 0)  {
+      printf("\n Read Error \n");
+      pthread_mutex_unlock(&monitor_socket_mutex);
+      usleep(100000);
+      continue;
+  }
 
   /* check if ACK is received, then receive the response and parse it */
   if (recvBuff[0]==0x6) {
 
   n = recv(sockfdMonitor, (char *)&acuStatusResp, sizeof(acuStatusResp),0);
+
+  pthread_mutex_unlock(&monitor_socket_mutex);
 
 /*
   printf("Read %d bytes from ACU\n",n);
@@ -3653,6 +3669,8 @@ printf("Time: %d\n",acuStatusResp.timeOfDay);
   if (acuStatusResp.servoSystemGS[4] & 16)
                 printf(" Shutter failure.\n");
 */
+  } else {
+  pthread_mutex_unlock(&monitor_socket_mutex);
   }
 
   if (recvBuff[0]==0x2) {
@@ -3748,19 +3766,34 @@ void *ACUiostatus() {
 
 
 	while(1) {
-	
+
+  /* Lock mutex for socket operations */
+  pthread_mutex_lock(&monitor_socket_mutex);
+
   n = send(sockfdMonitor,sendBuff,sizeof(acuCommand),0);
-  if (n<0) printf("ERROR writing to ACU.");
+  if (n<0) {
+      printf("ERROR writing to ACU.");
+      pthread_mutex_unlock(&monitor_socket_mutex);
+      usleep(100000);
+      continue;
+  }
 
   /* receive the ACK response from ACU */
   n = recv(sockfdMonitor, recvBuff, sizeof(ioStatusResp),0);
 
-  if( n < 0)  printf("\n Read Error \n");
+  if( n < 0)  {
+      printf("\n Read Error \n");
+      pthread_mutex_unlock(&monitor_socket_mutex);
+      usleep(100000);
+      continue;
+  }
 
   /* check if ACK is received, then receive the response and parse it */
   if (recvBuff[0]==0x6) {
 
   n = recv(sockfdMonitor, (char *)&ioStatusResp, sizeof(ioStatusResp),0);
+
+  pthread_mutex_unlock(&monitor_socket_mutex);
 
 /*
   printf("Read %d bytes from ACU\n",n);
@@ -3856,6 +3889,8 @@ printf("Time: %d\n",ioStatusResp.timeOfDay);
   }
 
 
+  } else {
+  pthread_mutex_unlock(&monitor_socket_mutex);
   } /* if recvBuff[0]  0x6 check */
 
   if (recvBuff[0]==0x2) {
@@ -3938,9 +3973,17 @@ void *ACUmetrology() {
   memcpy(sendBuff,(char*)&acuCommand,sizeof(acuCommand));
 
   while(1) {
-	
+
+  /* Lock mutex for socket operations */
+  pthread_mutex_lock(&control_socket_mutex);
+
   n = send(sockfdControl,sendBuff,sizeof(acuCommand),0);
-  if (n<0) printf("ERROR writing to ACU.");
+  if (n<0) {
+      printf("ERROR writing to ACU.");
+      pthread_mutex_unlock(&control_socket_mutex);
+      sleep(1);
+      continue;
+  }
 /*
   printf("Wrote %d bytes to ACU\n",n);
 */
@@ -3949,12 +3992,19 @@ void *ACUmetrology() {
   /* receive the ACK response from ACU */
   n = recv(sockfdControl, recvBuff, sizeof(metrologyDataSet),0);
 
-  if( n < 0)  printf("\n Read Error \n");
+  if( n < 0)  {
+      printf("\n Read Error \n");
+      pthread_mutex_unlock(&control_socket_mutex);
+      sleep(1);
+      continue;
+  }
 
   /* check if ACK is received, then receive the response and parse it */
   if (recvBuff[0]==0x6) {
 
   n = recv(sockfdControl, (char *)&metrologyDataSet,sizeof(metrologyDataSet),0);
+
+  pthread_mutex_unlock(&control_socket_mutex);
   
   tilt1x=metrologyDataSet.tilt1x;
   tilt1y=metrologyDataSet.tilt1y;
@@ -4043,6 +4093,8 @@ printf("tempSensor1=%d,tempSensor2=%d,tempSensor3=%d\n",tempSensor[0],tempSensor
         redisWriteInt("acu","tilt3x",tilt3x);
         redisWriteInt("acu","tilt3y",tilt3y);
 
+  } else {
+  pthread_mutex_unlock(&control_socket_mutex);
   }
 
   if (recvBuff[0]==0x2) {
@@ -4102,8 +4154,9 @@ void *ACUConnectionWatchdog(void *arg) {
         if (poll_status <= 0 || (pfd.revents & (POLLERR | POLLHUP))) {
             fprintf(stderr, "[ACU Watchdog] Connection lost. Attempting reconnection...\n");
 
-            /* Lock mutex before closing and reconnecting sockets */
-            pthread_mutex_lock(&socket_mutex);
+            /* Lock both mutexes before closing and reconnecting sockets */
+            pthread_mutex_lock(&control_socket_mutex);
+            pthread_mutex_lock(&monitor_socket_mutex);
 
             close(sockfdControl);
             close(sockfdMonitor);
@@ -4143,7 +4196,8 @@ void *ACUConnectionWatchdog(void *arg) {
             setsockopt(sockfdMonitor, SOL_SOCKET, SO_SNDTIMEO, &socket_timeout, sizeof(socket_timeout));
             fprintf(stderr, "[ACU Watchdog] Socket timeouts reconfigured after reconnection.\n");
 
-            pthread_mutex_unlock(&socket_mutex);
+            pthread_mutex_unlock(&monitor_socket_mutex);
+            pthread_mutex_unlock(&control_socket_mutex);
         }
 
         sleep(2);  // Polling interval
@@ -4260,19 +4314,19 @@ int ACUmode(int commandCode) {
   memcpy(sendBuff,(char*)&acuModeCommand,sizeof(acuModeCommand));
 
   /* Lock mutex for socket operations */
-  pthread_mutex_lock(&socket_mutex);
+  pthread_mutex_lock(&control_socket_mutex);
 
   n = send(sockfdControl,sendBuff,sizeof(acuModeCommand),0);
   if (n<0) {
       printf("ERROR writing to ACU.");
-      pthread_mutex_unlock(&socket_mutex);
+      pthread_mutex_unlock(&control_socket_mutex);
       return -1;
   }
 
   /* receive the ACK response from ACU */
   n = recv(sockfdControl, recvBuff, sizeof(acuStatusResp),0);
 
-  pthread_mutex_unlock(&socket_mutex);
+  pthread_mutex_unlock(&control_socket_mutex);
 /*
   printf("Received:  0x%x from ACU\n",recvBuff[0]);
 */
@@ -4353,12 +4407,12 @@ int ACUprogTrack(int numPos, int timeOfDay[], int azProgTrack[], int elProgTrack
    memcpy(sendBuff,(char*)&acuAzElProgCommand,sizeof(acuAzElProgCommand));
 
      /* Lock mutex for socket operations */
-     pthread_mutex_lock(&socket_mutex);
+     pthread_mutex_lock(&control_socket_mutex);
 
      n = send(sockfdControl,sendBuff,sizeof(acuAzElProgCommand),0);
      if (n<0) {
          printf("ERROR writing to ACU. For acuAzElProgCommand....");
-         pthread_mutex_unlock(&socket_mutex);
+         pthread_mutex_unlock(&control_socket_mutex);
          return -1;
      }
 /*
@@ -4409,12 +4463,12 @@ int ACUprogTrack(int numPos, int timeOfDay[], int azProgTrack[], int elProgTrack
    memcpy(sendBuff,(char*)&acuAzElProgCommandTraj,sizeof(acuAzElProgCommandTraj));
 
      /* Lock mutex for socket operations */
-     pthread_mutex_lock(&socket_mutex);
+     pthread_mutex_lock(&control_socket_mutex);
 
      n = send(sockfdControl,sendBuff,sizeof(acuAzElProgCommandTraj),0);
      if (n<0) {
          printf("ERROR writing to ACU. acuAzElprogCommandTraj.......");
-         pthread_mutex_unlock(&socket_mutex);
+         pthread_mutex_unlock(&control_socket_mutex);
          return -1;
      }
 /*
@@ -4426,7 +4480,7 @@ int ACUprogTrack(int numPos, int timeOfDay[], int azProgTrack[], int elProgTrack
      /* receive the ACK response from ACU */
      n = recv(sockfdControl, recvBuff, sizeof(acuStatusResp),0);
 
-     pthread_mutex_unlock(&socket_mutex);
+     pthread_mutex_unlock(&control_socket_mutex);
 
      if( n < 0)  printf("\n Read Error \n");
 
@@ -4505,19 +4559,19 @@ int ACUAzEl(double cmdAzdeg, double cmdEldeg) {
   memcpy(sendBuff,(char*)&acuAzElCommand,sizeof(acuAzElCommand));
 
   /* Lock mutex for socket operations */
-  pthread_mutex_lock(&socket_mutex);
+  pthread_mutex_lock(&control_socket_mutex);
 
   n = send(sockfdControl,sendBuff,sizeof(acuAzElCommand),0);
   if (n<0) {
       printf("ERROR writing to ACU.");
-      pthread_mutex_unlock(&socket_mutex);
+      pthread_mutex_unlock(&control_socket_mutex);
       return -1;
   }
 
   /* receive the ACK response from ACU */
   n = recv(sockfdControl, recvBuff, sizeof(acuStatusResp),0);
 
-  pthread_mutex_unlock(&socket_mutex);
+  pthread_mutex_unlock(&control_socket_mutex);
 
   if( n < 0)  printf("\n Read Error \n"); 
 
@@ -4596,11 +4650,21 @@ int ACUAzElRate(double cmdAzRate, double cmdElRate) {
   memset(sendBuff, '0' ,sizeof(sendBuff));
 
   memcpy(sendBuff,(char*)&acuAzElRateCommand,sizeof(acuAzElRateCommand));
+
+  /* Lock mutex for socket operations */
+  pthread_mutex_lock(&control_socket_mutex);
+
   n = send(sockfdControl,sendBuff,sizeof(acuAzElRateCommand),0);
-  if (n<0) printf("ERROR writing to ACU.");
- 
+  if (n<0) {
+      printf("ERROR writing to ACU.");
+      pthread_mutex_unlock(&control_socket_mutex);
+      return -1;
+  }
+
   /* receive the ACK response from ACU */
-  n = recv(sockfdControl, recvBuff, sizeof(acuStatusResp),0); 
+  n = recv(sockfdControl, recvBuff, sizeof(acuStatusResp),0);
+
+  pthread_mutex_unlock(&control_socket_mutex);
 
   if( n < 0)  printf("\n Read Error \n"); 
 
