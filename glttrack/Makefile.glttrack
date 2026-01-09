@@ -4,16 +4,16 @@ CC = gcc -g -Wall
 BIN = gltTrack
 #LFLAGS = -L$(COMMONLIB)
 #-lrpc
-LIB = -ldsm -lrt -lm -lcurses  -lpthread
-INC = -I$(GLOBALINC) -I$(COMMONINC) 
+LIB = -ldsm -lrt -lm -lcurses  -lpthread -lhiredis
+INC = -I$(GLOBALINC) -I$(COMMONINC) -I/usr/local/include 
 OBJ = glttrack.o local.o mount.o Refract.o solsys2.o readeph0.o \
 	novas.o novascon.o pleph2.o cspice.a 
 
 all: $(BIN)
 
 gltTrack: glttrack.o local.o mount.o Refract.o solsys2.o readeph0.o \
-	novas.o novascon.o pleph2.o 
-	$(CC) -o $(BIN) $(OBJ) -L/global/dsm64/ $(LIB) 
+	novas.o novascon.o pleph2.o
+	$(CC) -o $(BIN) $(OBJ) -L/global/dsm64/ -L/usr/local/lib $(LIB) 
 
 glttrack.o: glttrack.c antennaPosition.h
 	$(CC) -c glttrack.c  $(INC) -I/global/dsm64/
