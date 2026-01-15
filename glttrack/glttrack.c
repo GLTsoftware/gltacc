@@ -118,7 +118,7 @@ the main loop.
 /* FALSE for testing without servo; no real encoder readings, no antenna motion */
 #define SERVO 0
 
-#define NUMPOS 6 /* number of trajectory points for ACU program track mode */
+#define NUMPOS 15 /* number of trajectory points for ACU program track mode */
 
 // ACU connection retry logic
 #define MAX_CONNECT_RETRIES 10
@@ -559,8 +559,9 @@ double et_prev_big_time_step=0.,et_time_interval;
 
 /*
      int loop_time = 250000;
-*/
      int loop_time = 500000;
+*/
+     int loop_time = 200000;
 
     /* END OF VARIABLE DECLARATIONS */
 
@@ -4460,7 +4461,7 @@ int ACUprogTrack(int numPos, int timeOfDay[], int azProgTrack[], int elProgTrack
 
   acuAzElProgCommandTraj.stx = 0x2;
   acuAzElProgCommandTraj.id = 0x42; /* page 17 of ICD section 4.1.1.5  B cmd */
-  acuAzElProgCommandTraj.datalength = 0x5d; /* (n*14+9)= 93  in hex; n=6 */
+  acuAzElProgCommandTraj.datalength = 0xdb; /* (n*14+9)= 219 in hex; n=15 */
   acuAzElProgCommandTraj.numPos = (short)numPos;
 
   acuAzElProgCommandTraj.timeOfDay0=timeOfDay[0];
@@ -4492,6 +4493,52 @@ int ACUprogTrack(int numPos, int timeOfDay[], int azProgTrack[], int elProgTrack
   acuAzElProgCommandTraj.dayOfYear5=(short)acuDay;
   acuAzElProgCommandTraj.cmdAz5 = azProgTrack[5];
   acuAzElProgCommandTraj.cmdEl5 = elProgTrack[5];
+
+  acuAzElProgCommandTraj.timeOfDay6=timeOfDay[6];
+  acuAzElProgCommandTraj.dayOfYear6=(short)acuDay;
+  acuAzElProgCommandTraj.cmdAz6 = azProgTrack[6];
+  acuAzElProgCommandTraj.cmdEl6 = elProgTrack[6];
+
+  acuAzElProgCommandTraj.timeOfDay7=timeOfDay[7];
+  acuAzElProgCommandTraj.dayOfYear7=(short)acuDay;
+  acuAzElProgCommandTraj.cmdAz7 = azProgTrack[7];
+  acuAzElProgCommandTraj.cmdEl7 = elProgTrack[7];
+
+  acuAzElProgCommandTraj.timeOfDay8=timeOfDay[8];
+  acuAzElProgCommandTraj.dayOfYear8=(short)acuDay;
+  acuAzElProgCommandTraj.cmdAz8 = azProgTrack[8];
+  acuAzElProgCommandTraj.cmdEl8 = elProgTrack[8];
+
+  acuAzElProgCommandTraj.timeOfDay9=timeOfDay[9];
+  acuAzElProgCommandTraj.dayOfYear9=(short)acuDay;
+  acuAzElProgCommandTraj.cmdAz9 = azProgTrack[9];
+  acuAzElProgCommandTraj.cmdEl9 = elProgTrack[9];
+
+  acuAzElProgCommandTraj.timeOfDay10=timeOfDay[10];
+  acuAzElProgCommandTraj.dayOfYear10=(short)acuDay;
+  acuAzElProgCommandTraj.cmdAz10 = azProgTrack[10];
+  acuAzElProgCommandTraj.cmdEl10 = elProgTrack[10];
+
+  acuAzElProgCommandTraj.timeOfDay11=timeOfDay[11];
+  acuAzElProgCommandTraj.dayOfYear11=(short)acuDay;
+  acuAzElProgCommandTraj.cmdAz11 = azProgTrack[11];
+  acuAzElProgCommandTraj.cmdEl11 = elProgTrack[11];
+
+  acuAzElProgCommandTraj.timeOfDay12=timeOfDay[12];
+  acuAzElProgCommandTraj.dayOfYear12=(short)acuDay;
+  acuAzElProgCommandTraj.cmdAz12 = azProgTrack[12];
+  acuAzElProgCommandTraj.cmdEl12 = elProgTrack[12];
+
+  acuAzElProgCommandTraj.timeOfDay13=timeOfDay[13];
+  acuAzElProgCommandTraj.dayOfYear13=(short)acuDay;
+  acuAzElProgCommandTraj.cmdAz13 = azProgTrack[13];
+  acuAzElProgCommandTraj.cmdEl13 = elProgTrack[13];
+
+  acuAzElProgCommandTraj.timeOfDay14=timeOfDay[14];
+  acuAzElProgCommandTraj.dayOfYear14=(short)acuDay;
+  acuAzElProgCommandTraj.cmdAz14 = azProgTrack[14];
+  acuAzElProgCommandTraj.cmdEl14 = elProgTrack[14];
+
   acuAzElProgCommandTraj.etx = 0x3;
 
   checksum = checkSum((char*)(&acuAzElProgCommandTraj), sizeof(acuAzElProgCommandTraj));
