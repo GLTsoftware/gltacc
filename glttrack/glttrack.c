@@ -2312,6 +2312,7 @@ if(sun_avoid_flag==1) {
         redisWriteDouble("gltTrackUser","azoff_ack",0.0);
 */
 	az_offset_flag=1;
+	firstTrack=1;  /* force recalculation of full trajectory with new azoff */
 		user = -1;
 	break;
 
@@ -2338,6 +2339,7 @@ for holography mapping */
         redisWriteDouble("gltTrackUser","eloff_ack",0.0);
 */
         el_offset_flag=1;
+	firstTrack=1;  /* force recalculation of full trajectory with new eloff */
 		user = -1;
 	break;
 
