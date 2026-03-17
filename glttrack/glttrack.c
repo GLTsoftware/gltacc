@@ -3974,12 +3974,12 @@ void *ACUmetrology() {
   short checksum;
 
   char acuErrorMessage[256],generalMetStatus[4];
-  int tilt1x,tilt1y,tilt2x,tilt2y,tilt3x,tilt3y;
-  int tilt1Temp,tilt2Temp,tilt3Temp;
-  int linearSensor1,linearSensor2,linearSensor3,linearSensor4;
-  int tiltAzCorr,tiltElCorr;
-  int linearSensorAzCorr,linearSensorElCorr;
-  int SPEMazCorr,SPEMelCorr;
+  long tilt1x,tilt1y,tilt2x,tilt2y,tilt3x,tilt3y;
+  long tilt1Temp,tilt2Temp,tilt3Temp;
+  long linearSensor1,linearSensor2,linearSensor3,linearSensor4;
+  long tiltAzCorr,tiltElCorr;
+  long linearSensorAzCorr,linearSensorElCorr;
+  long SPEMazCorr,SPEMelCorr;
   short tempSensor[41];
   
   acuCommand.stx = 0x2;
