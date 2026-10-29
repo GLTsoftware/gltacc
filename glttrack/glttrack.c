@@ -1809,9 +1809,16 @@ If this is the first time after source change (firstTrack=1) then compute
 NUMPOS values in future and pass the array to ACU. Else, compute
 (NUMPS+1)th value and pass the az/el to ACU to accumulate in its stack */
        if (firstTrack==1) {
+        /* points loop_time apart, like those added one per loop below, so
+        the trajectory runs from loop_time to NUMPOS*loop_time (3 s) ahead
+        and the next point, (NUMPOS+2)*loop_time ahead, follows it.  These
+        were 1 s apart (iT+loop_time/1e6), which
+        made the trajectory 14 s long after every azoff/eloff: the antenna
+        did not follow a scan started in that time and then jumped to catch
+        up (seen in the OTF maps of 29 Oct 2026). */
         for(iT=0;iT<NUMPOS;iT++){
-        lstT=lst_radian+(iT+loop_time/1.0e6)*7.272205e-5; /*secsPerRadians*/
-        tjdT=tjd + (iT+loop_time/1.0e6)/86400.;
+        lstT=lst_radian+(iT+1)*(loop_time/1.0e6)*7.272205e-5; /*secsPerRadians*/
+        tjdT=tjd + (iT+1)*(loop_time/1.0e6)/86400.;
 	    local(&lstT, &ra, &dec, &azT,&elT,&tjdT,&azoff, &eloff, &pressure, &temperature, &humidity, &radio_flag, &refraction, &pmdaz, &pmdel,&target_flag,&commanded_az,&commanded_el);
         /* correct az for cable wrap; see below*/
 /*
@@ -1820,7 +1827,7 @@ NUMPOS values in future and pass the array to ACU. Else, compute
 */
           if (azT/radian > AZ_CW_LIMIT) azT-=(2.*pi);
           if (azT/radian < AZ_CCW_LIMIT) azT+=(2.*pi); 
-        timeOfDay[iT]=milliseconds+(iT+loop_time/1.0e6)*1000;
+        timeOfDay[iT]=milliseconds+(iT+1)*(loop_time/1.0e6)*1000;
         azProgTrack[iT]=(int)round(azT*microdeg);
         elProgTrack[iT]=(int)round(elT*microdeg);
 	}
