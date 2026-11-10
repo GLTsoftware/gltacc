@@ -52,6 +52,7 @@ the main loop.
 #include <sys/file.h>
 #include <termio.h>
 #include <sys/time.h>
+#include <time.h>
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
@@ -206,6 +207,53 @@ char pointingParameter[20];
 int numParameters=0;
 int setTiltFlag,defaultTiltFlag,rdefaultTiltFlag;
 char opticalValue[20],radioValue[20];
+/* Radio pointing-model column selection. pointingModel columns are:
+   Parameter Optical 86 230 86+230 345  (token index 1..5 below).
+   radioColumn is the token index of the active radio set; set by the
+   'radio <freq>' command (default 230 GHz at startup). A legacy 3-column
+   file (Parameter Optical Radio) is still accepted. */
+#define PM_COL_86      2
+#define PM_COL_230     3
+#define PM_COL_86_230  4
+#define PM_COL_345     5
+int  radioColumn=PM_COL_230;
+char radioLabel[12]="230";
+char commandArg[30]="";   /* argument string following command code */
+#define PM_COL_ZERO    -1   /* radio 0: all pointing parameters zero (holography) */
+#define LAST_RADIO_FILE "lastRadioFreq"  /* remembers last radio freq across restarts */
+
+/* Map a frequency string to a pointingModel column; returns 0 if invalid. */
+int radioFreqToColumn(const char *f, int *col) {
+  if(!strcmp(f,"0"))      { *col=PM_COL_ZERO;   return 1; }
+  if(!strcmp(f,"86"))     { *col=PM_COL_86;     return 1; }
+  if(!strcmp(f,"230"))    { *col=PM_COL_230;    return 1; }
+  if(!strcmp(f,"86+230")) { *col=PM_COL_86_230; return 1; }
+  if(!strcmp(f,"345"))    { *col=PM_COL_345;    return 1; }
+  return 0;
+}
+/* Publish the active pointing-model mode to redis (hash gltTrackComp) for the
+   gltmonitor 'p' page: optical, 0, 86, 230, 86+230 or 345, plus a timestamp
+   so the monitor can tell if gltTrack stopped updating. No DSM variable used. */
+void publishPointingMode(int radioFlag) {
+  redisWriteString("gltTrackComp","pointingModelType",radioFlag?radioLabel:"optical");
+  redisWriteInt("gltTrackComp","pointingModelTime",(int)time(NULL));
+}
+void saveLastRadioFreq(const char *f) {
+  FILE *fp=fopen(LAST_RADIO_FILE,"w");
+  if(fp==NULL) { fprintf(stderr,"Cannot write %s\n",LAST_RADIO_FILE); return; }
+  fprintf(fp,"%s\n",f);
+  fclose(fp);
+}
+/* At startup restore the last-used radio freq; keep the 230 default if none. */
+void loadLastRadioFreq(void) {
+  char f[20]; int col;
+  FILE *fp=fopen(LAST_RADIO_FILE,"r");
+  if(fp==NULL) return;
+  if(fscanf(fp,"%15s",f)==1 && radioFreqToColumn(f,&col)) {
+    radioColumn=col; strcpy(radioLabel,f);
+  }
+  fclose(fp);
+}
 
 double 	radian;
 
@@ -1172,6 +1220,9 @@ beginning:
 
     /* read mount model parameters */
 	if(read_mount_model_flag==1) {
+	{ static int lastFreqLoaded=0;
+	  if(!lastFreqLoaded) { loadLastRadioFreq(); lastFreqLoaded=1;
+	    fprintf(stderr,"Radio pointing model: %s GHz\n",radioLabel); } }
 	fp_mount_model=fopen("pointingModel","r"); 
 	if(fp_mount_model==NULL) {
 	fprintf(stderr,"Failed to open the mount model file.\n");
@@ -1184,7 +1235,24 @@ beginning:
         while(fgets(line,sizeof(line),fp_mount_model) != NULL) {
         line[strlen(line)-1]='\0';
                 if(line[0]!='#') {
-        sscanf(line,"%s %s %s", pointingParameter, opticalValue, radioValue);
+        {
+        char tok[6][20];
+        int ntok,radioTok;
+        { char *cp; for(cp=line;*cp;cp++) if(*cp==',') *cp=' '; } /* commas allowed as delimiters */
+        ntok=sscanf(line,"%19s %19s %19s %19s %19s %19s",tok[0],tok[1],tok[2],tok[3],tok[4],tok[5]);
+        if(ntok<=0) continue;   /* blank line */
+        if(ntok==3) radioTok=2;               /* legacy 3-column file */
+        else if(ntok==6) radioTok=radioColumn;
+        else {
+          fprintf(stderr,"pointingModel: line has %d columns (expected 6: Parameter Optical 86 230 86+230 345): %s\n",ntok,line);
+          corruptedMountModelFile=1;
+          continue;
+        }
+        strcpy(pointingParameter,tok[0]);
+        strcpy(opticalValue,tok[1]);
+        strcpy(radioValue,tok[radioTok]);
+        if(radioColumn==PM_COL_ZERO) strcpy(radioValue,strcmp(tok[0],"Date")?"0":"zero");
+        }
                      if(!strcmp(pointingParameter,"AzDC")) {
                      azdc=atof(opticalValue);
                      razdc=atof(radioValue);
@@ -2328,12 +2396,35 @@ if(sun_avoid_flag==1) {
 for holography mapping */
 
 	case '5':
-	radio_flag=1;
-		user = -1;
+	{
+	  /* 'radio <freq>': commandArg is 86, 230, 86+230 or 345 */
+	  int newCol=0;
+	  char newLabel[12]="";
+	  if(radioFreqToColumn(commandArg,&newCol)) strncpy(newLabel,commandArg,sizeof(newLabel)-1);
+	  else {
+	    snprintf(messg,sizeof(messg),"radio: bad freq '%.12s'; use 0,86,230,86+230,345",commandArg);
+	    fprintf(stderr,"%s\n",messg);
+	    SendMessageToDSM(messg);
+	    user = -1;
+	    break;
+	  }
+	  radioColumn=newCol;
+	  strcpy(radioLabel,newLabel);
+	  saveLastRadioFreq(radioLabel);
+	  radio_flag=1;
+	  publishPointingMode(radio_flag);
+	  if(radioColumn==PM_COL_ZERO) snprintf(messg,sizeof(messg),"Radio pointing model: ZERO (holography)");
+	  else snprintf(messg,sizeof(messg),"Radio pointing model: %s GHz",radioLabel);
+	  SendMessageToDSM(messg);
+	  read_mount_model_flag=1;  /* reload pointingModel for the new column */
+	  user = -1;
+	  goto beginning;
+	}
 	break;
 
 	case '4':
 	radio_flag=0;
+	publishPointingMode(radio_flag);
 		user = -1;
 	break;
 
@@ -2754,6 +2845,7 @@ we are observing sources other than stars for optical pointing */
         dsm_status=dsm_write(DSM_HOST,"DSM_ELAZTILTCOS2_ARCSEC_D", &reaztilt_cos2);
         dsm_status=dsm_write(DSM_HOST,"DSM_ELRMS_ARCSEC_D", &relmodelrms);
         dsm_status=dsm_write(DSM_HOST,"DSM_MODELDATE_C10",rmodeldate);
+	{ static int pmCount=0; if((pmCount++ % 25)==0) publishPointingMode(radio_flag); }
 	}
 	if(radio_flag==0) {
         dsm_status=dsm_write(DSM_HOST,"DSM_AZDC_ARCSEC_D", &azdc);
@@ -2781,6 +2873,7 @@ we are observing sources other than stars for optical pointing */
         dsm_status=dsm_write(DSM_HOST,"DSM_ELAZTILTCOS2_ARCSEC_D", &eaztilt_cos2);
         dsm_status=dsm_write(DSM_HOST,"DSM_ELRMS_ARCSEC_D", &elmodelrms);
         dsm_status=dsm_write(DSM_HOST,"DSM_MODELDATE_C10",modeldate);
+	{ static int pmCount2=0; if((pmCount2++ % 25)==0) publishPointingMode(radio_flag); }
 	}
 
 #endif
@@ -3293,6 +3386,9 @@ replacing read_wait by read for now.
         }
 
         user=(int)command[0];
+        command[29]='\0';
+        strncpy(commandArg,(command[0]!='\0' && command[1]==' ')?&command[2]:"",sizeof(commandArg)-1);
+        commandArg[sizeof(commandArg)-1]='\0';
 	interrupt_command_flag=1;
 
 	command_flag=1;
