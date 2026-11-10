@@ -23,7 +23,7 @@ newest_all = max(files, key=lambda f: key(files[f][0]))
 data = {fr: load(f)[0] for fr, f in newest.items()}
 opt, order = load(newest_all)
 w = lambda *a: " ".join(f"{x:>11}" for x in a)
-out = ["# Pointing Model Parameters for Antenna-1", "# All values are in arcseconds.",
+out = ["# Pointing Model Parameters for GLT", "# All values are in arcseconds.",
        f"# Optical from {newest_all}",
        *[f"# {fr} GHz from {newest[fr]}" for fr in newest],
        "# 86+230 column = mean of 86 and 230 (placeholder; replace when measured).",
