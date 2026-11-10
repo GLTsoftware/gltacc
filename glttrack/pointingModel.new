@@ -1,33 +1,33 @@
 # Pointing Model Parameters for GLT
 # All values are in arcseconds.
-# Optical from pointingModel-201127-OpticalRadio-230
-# 86 GHz from pointingModel-201106-OpticalRadio-86
-# 230 GHz from pointingModel-201127-OpticalRadio-230
-# 345 GHz from pointingModel-191216-OpticalRadio-345
+# Optical from pointingModel-251203-OpticalRadio-86
+# 86 GHz from pointingModel-251203-OpticalRadio-86
+# 230 GHz from pointingModel-251201-OpticalRadio-230
+# 345 GHz from pointingModel-250414-OpticalRadio-345
 # 86+230 column = mean of 86 and 230 (placeholder; replace when measured).
 # Parameter       Optical          86         230      86+230         345
-AzDC               -23.97      -35.14      -45.78     -40.460      -59.53
-AzColl           2886.357     -10.598     287.458     138.430      -73.73
-ElTilt            -12.221       2.499      -0.621       0.939     -28.271
-AAzTltSin         -25.481     -25.358     -24.668     -25.013     -24.378
-AAzTltCos         -14.634     -26.475     -25.904     -26.190     -17.114
-AAzTltSin2         -0.635      -0.205       1.235       0.515      -0.515
-AAzTltCos2         -0.688      -1.795       0.212      -0.791      -0.538
-AzEncSin            0.000       0.000       0.000       0.000       0.000
-AzEncCos            0.000       0.000       0.000       0.000       0.000
-AzEncSin2           0.000       0.000       0.000       0.000       0.000
-AzEncCos2           0.000       0.000       0.000       0.000       0.000
-AzEncSin3           0.000       0.000       0.000       0.000       0.000
-AzEncCos3           0.000       0.000       0.000       0.000       0.000
-AzRms                2.94       2.910       1.370       2.140       1.740
-ElDC             -799.290     765.489     769.709     767.599     723.015
-ElSag              -5.552      -9.677       -9.01      -9.343       0.073
-ElSagSin            22.36      26.401       30.97      28.685      34.104
-ElSagTan            18.91       0.000       0.000       0.000       0.000
-EAzTltSin         -23.253     -26.423     -25.073     -25.748     -24.663
-EAzTltCos         -11.124     -18.194     -16.814     -17.504     -12.154
-EAzTltSin2         -0.852      -0.082      -2.032      -1.057      -1.222
-EAzTltCos2         -0.342      -0.652       0.028      -0.312      -0.692
-ElRms                2.45       2.770       1.610       2.190       1.870
-TiltFlag                0           0           0           0           0
-Date              16Dec19     06Nov20     27Nov20     27Nov20     28Nov19
+AzDC               -41.10      -41.08      -44.98     -43.030      -43.73
+AzColl            2897.07      40.472      53.292      46.882       6.352
+ElTilt            -27.110      -0.741       2.739       0.999      10.889
+AAzTltSin          -35.91      -41.65      -40.83     -41.240      -32.66
+AAzTltCos          -35.04      -39.74      -41.77     -40.755      -37.26
+AAzTltSin2          1.775       0.435       0.205       0.320      -0.145
+AAzTltCos2         -0.498      -0.558      -0.128      -0.343       0.812
+AzEncSin            0.000         0.0         0.0       0.000         0.0
+AzEncCos            0.000         0.0         0.0       0.000         0.0
+AzEncSin2           0.000         0.0         0.0       0.000         0.0
+AzEncCos2           0.000         0.0         0.0       0.000         0.0
+AzEncSin3           0.000         0.0         0.0       0.000         0.0
+AzEncCos3           0.000         0.0         0.0       0.000         0.0
+AzRms                1.59        2.77        1.97       2.370        2.85
+ElDC              -810.94     735.009     752.049     743.529     789.659
+ElSag               21.34      -0.097      -9.577      -4.837     -21.007
+ElSagSin            26.20      42.801      37.661      40.231      28.151
+ElSagTan            19.76         0.0         0.0       0.000         0.0
+EAzTltSin          -33.52      -42.75      -42.92     -42.835      -36.44
+EAzTltCos         -31.054     -33.714     -34.594     -34.154     -31.634
+EAzTltSin2         -0.422      -0.622      -0.342      -0.482      -1.262
+EAzTltCos2         -0.942       0.208       0.438       0.323       0.028
+ElRms                1.65        2.62        1.52       2.070        3.64
+TiltFlag                0         0.0         0.0         0.0         0.0
+Date              10Jan24     03Dec25     01Dec25     01Dec25     14Apr25

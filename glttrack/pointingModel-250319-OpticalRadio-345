@@ -1,0 +1,28 @@
+# Pointing Model Parameters for Antenna-1
+# All values are in arcseconds. 345 GHz
+# Parameter  Optical     Radio
+AzDC            -41.10    -68.98
+AzColl         2897.07    -118.0
+ElTilt         -27.110   -12.071
+AAzTltSin       -35.91    -32.61
+AAzTltCos       -35.04    -38.82
+AAzTltSin2       1.775     1.235
+AAzTltCos2      -0.498    -0.458
+AzEncSin         0.000       0.0
+AzEncCos         0.000       0.0
+AzEncSin2        0.000       0.0
+AzEncCos2        0.000       0.0
+AzEncSin3        0.000       0.0
+AzEncCos3        0.000       0.0
+AzRms             1.59      1.97
+ElDC           -810.94   829.605
+ElSag            21.34   -38.007
+ElSagSin         26.20    15.264
+ElSagTan         19.76       0.0
+EAzTltSin       -33.52    -33.66
+EAzTltCos      -31.054   -31.354
+EAzTltSin2      -0.422    -0.052
+EAzTltCos2      -0.942    -0.562
+ElRms             1.65      2.27
+TiltFlag             0       0.0
+Date           10Jan24   19Mar25

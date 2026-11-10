@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Merge dated pointingModel-YYMMDD-OpticalRadio-<freq> files into one
 5-column pointingModel: Parameter Optical 86 230 86+230 345.
+("radio 0", holography, is zeroed inside gltTrack: no column needed.)
 Optical comes from the newest file overall; each radio column from the newest
 file for that frequency. 86+230 = mean of the 86 and 230 columns (placeholder
 until measured). Usage: mergePointingModel.py [outfile]  (default pointingModel.new)

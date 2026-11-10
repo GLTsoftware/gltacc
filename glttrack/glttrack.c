@@ -209,6 +209,7 @@ int setTiltFlag,defaultTiltFlag,rdefaultTiltFlag;
 char opticalValue[20],radioValue[20];
 /* Radio pointing-model column selection. pointingModel columns are:
    Parameter Optical 86 230 86+230 345  (token index 1..5 below).
+   'radio 0' needs no column: all radio parameters are zeroed in code.
    radioColumn is the token index of the active radio set; set by the
    'radio <freq>' command (default 230 GHz at startup). A legacy 3-column
    file (Parameter Optical Radio) is still accepted. */
@@ -216,10 +217,10 @@ char opticalValue[20],radioValue[20];
 #define PM_COL_230     3
 #define PM_COL_86_230  4
 #define PM_COL_345     5
+#define PM_COL_ZERO    -1   /* radio 0: all radio parameters zero (holography) */
 int  radioColumn=PM_COL_230;
 char radioLabel[12]="230";
 char commandArg[30]="";   /* argument string following command code */
-#define PM_COL_ZERO    -1   /* radio 0: all pointing parameters zero (holography) */
 #define LAST_RADIO_FILE "lastRadioFreq"  /* remembers last radio freq across restarts */
 
 /* Map a frequency string to a pointingModel column; returns 0 if invalid. */
@@ -1242,7 +1243,7 @@ beginning:
         ntok=sscanf(line,"%19s %19s %19s %19s %19s %19s",tok[0],tok[1],tok[2],tok[3],tok[4],tok[5]);
         if(ntok<=0) continue;   /* blank line */
         if(ntok==3) radioTok=2;               /* legacy 3-column file */
-        else if(ntok==6) radioTok=radioColumn;
+        else if(ntok==6) radioTok=(radioColumn==PM_COL_ZERO)?PM_COL_230:radioColumn;
         else {
           fprintf(stderr,"pointingModel: line has %d columns (expected 6: Parameter Optical 86 230 86+230 345): %s\n",ntok,line);
           corruptedMountModelFile=1;
