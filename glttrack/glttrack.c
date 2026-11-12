@@ -234,10 +234,64 @@ int radioFreqToColumn(const char *f, int *col) {
 }
 /* Publish the active pointing-model mode to redis (hash gltTrackComp) for the
    gltmonitor 'p' page: optical, 0, 86, 230, 86+230 or 345, plus a timestamp
-   so the monitor can tell if gltTrack stopped updating. No DSM variable used. */
+   so the monitor can tell if gltTrack stopped updating. No DSM variable used.
+
+   All redis I/O for this is done by a separate low-priority thread
+   (PointingModelPublisher, SCHED_OTHER) with its OWN redis connection to the
+   gltobscon server, so a slow or dead redis can never delay the real-time
+   tracking threads. The tracking code only stores the current mode in a small
+   mutex-protected struct via publishPointingMode(). The rest of gltTrack's
+   redis writes still use redisC / REDIS_SERVER; that is deliberately untouched. */
+#define PM_REDIS_SERVER "192.168.1.141"
+#define PM_REDIS_PORT 6379
+#define PM_PUBLISH_SEC 2     /* publish interval, seconds */
+#define PM_RETRY_SEC 10      /* wait before reconnecting after a failure */
+pthread_mutex_t pmMutex=PTHREAD_MUTEX_INITIALIZER;
+char pmSharedLabel[12]="230";
+int  pmSharedRadioFlag=1;
+pthread_t pmPublisherTID;
+
 void publishPointingMode(int radioFlag) {
-  redisWriteString("gltTrackComp","pointingModelType",radioFlag?radioLabel:"optical");
-  redisWriteInt("gltTrackComp","pointingModelTime",(int)time(NULL));
+  pthread_mutex_lock(&pmMutex);
+  pmSharedRadioFlag=radioFlag;
+  strncpy(pmSharedLabel,radioLabel,sizeof(pmSharedLabel)-1);
+  pmSharedLabel[sizeof(pmSharedLabel)-1]='\0';
+  pthread_mutex_unlock(&pmMutex);
+}
+
+void *PointingModelPublisher(void *arg) {
+  redisContext *c=NULL;
+  redisReply *r;
+  struct timeval tv={1,0};
+  char label[12];
+  int flag;
+  while(1) {
+    sleep(PM_PUBLISH_SEC);
+    if(c==NULL) {
+      c=redisConnectWithTimeout(PM_REDIS_SERVER,PM_REDIS_PORT,tv);
+      if(c==NULL || c->err) {
+        if(c) redisFree(c);
+        c=NULL;
+        sleep(PM_RETRY_SEC);
+        continue;
+      }
+      redisSetTimeout(c,tv);
+    }
+    pthread_mutex_lock(&pmMutex);
+    flag=pmSharedRadioFlag;
+    strcpy(label,pmSharedLabel);
+    pthread_mutex_unlock(&pmMutex);
+    r=redisCommand(c,"HSET gltTrackComp pointingModelType %s pointingModelTime %ld",
+                   flag?label:"optical",(long)time(NULL));
+    if(r==NULL) {            /* error or timeout: drop connection, retry later */
+      redisFree(c);
+      c=NULL;
+      sleep(PM_RETRY_SEC);
+    } else {
+      freeReplyObject(r);
+    }
+  }
+  return NULL;
 }
 void saveLastRadioFreq(const char *f) {
   FILE *fp=fopen(LAST_RADIO_FILE,"w");
@@ -884,6 +938,22 @@ DAEMONSET
         fprintf(stderr,"[glttrack] Starting ACU connection watchdog thread.\n");
         sleep(2);
 
+        /* pointing-model mode publisher: normal (non-real-time) priority so it
+           can never preempt the SCHED_FIFO tracking threads */
+        {
+          pthread_attr_t pmAttr;
+          pthread_attr_init(&pmAttr);
+          pthread_attr_setinheritsched(&pmAttr,PTHREAD_EXPLICIT_SCHED);
+          pthread_attr_setschedpolicy(&pmAttr,SCHED_OTHER);
+          if(pthread_create(&pmPublisherTID,&pmAttr,PointingModelPublisher,NULL)!=0) {
+            fprintf(stderr,"Failed to start PointingModelPublisher thread.\n");
+          } else {
+            pthread_detach(pmPublisherTID);
+            fprintf(stderr,"[glttrack] Starting pointing-model publisher thread.\n");
+          }
+          pthread_attr_destroy(&pmAttr);
+        }
+
 
     /* tracking smoothing error */
 
@@ -1406,6 +1476,7 @@ beginning:
 	}
 
 	read_mount_model_flag=0;
+	publishPointingMode(radio_flag);
 	}
 
 /*
@@ -2846,7 +2917,6 @@ we are observing sources other than stars for optical pointing */
         dsm_status=dsm_write(DSM_HOST,"DSM_ELAZTILTCOS2_ARCSEC_D", &reaztilt_cos2);
         dsm_status=dsm_write(DSM_HOST,"DSM_ELRMS_ARCSEC_D", &relmodelrms);
         dsm_status=dsm_write(DSM_HOST,"DSM_MODELDATE_C10",rmodeldate);
-	{ static int pmCount=0; if((pmCount++ % 25)==0) publishPointingMode(radio_flag); }
 	}
 	if(radio_flag==0) {
         dsm_status=dsm_write(DSM_HOST,"DSM_AZDC_ARCSEC_D", &azdc);
@@ -2874,7 +2944,6 @@ we are observing sources other than stars for optical pointing */
         dsm_status=dsm_write(DSM_HOST,"DSM_ELAZTILTCOS2_ARCSEC_D", &eaztilt_cos2);
         dsm_status=dsm_write(DSM_HOST,"DSM_ELRMS_ARCSEC_D", &elmodelrms);
         dsm_status=dsm_write(DSM_HOST,"DSM_MODELDATE_C10",modeldate);
-	{ static int pmCount2=0; if((pmCount2++ % 25)==0) publishPointingMode(radio_flag); }
 	}
 
 #endif
